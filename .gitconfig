@@ -66,6 +66,14 @@
 	# Show the user email for the current repository.
 	whoami = config user.email
 
+
+    # Few other aliases I'd like to retain
+    co = checkout
+    ci = commit
+    st = status
+    br = branch
+    hist = log --pretty=format:\"%h %ad | %s%d [%an]\" --graph --date=short
+
 [apply]
 
 	# Detect whitespace errors when applying a patch.
@@ -85,7 +93,7 @@
 	# Treat spaces before tabs and all kinds of trailing whitespace as an error.
 	# [default] trailing-space: looks for spaces at the end of a line
 	# [default] space-before-tab: looks for spaces before tabs at the beginning of a line
-	whitespace = space-before-tab,-indent-with-non-tab,trailing-space
+	whitespace = space-before-tab,-indent-with-non-tab,trailing-space,cr-at-eol
 
 	# Make `git rebase` safer on macOS.
 	# More info: <http://www.git-tower.com/blog/make-git-rebase-safe-on-osx/>
@@ -98,6 +106,9 @@
 	# Speed up commands involving untracked files such as `git status`.
 	# https://git-scm.com/docs/git-update-index#_untracked_cache
 	untrackedCache = true
+
+	autocrlf = false
+	safecrlf = true
 
 [color]
 
@@ -117,6 +128,7 @@
 	frag = magenta bold # line info
 	old = red # deletions
 	new = green # additions
+    whitespace = red reverse
 
 [color "status"]
 
@@ -127,7 +139,7 @@
 [commit]
 
 	# https://help.github.com/articles/signing-commits-using-gpg/
-	gpgsign = true
+#	gpgsign = true
 
 [diff]
 
@@ -155,6 +167,12 @@
 	default = simple
 	# Make `git push` push relevant annotated tags when pushing branches out.
 	followTags = true
+
+[http]
+    sslverify = false
+
+[branch]
+    autosetuprebase = always
 
 # URL shorthands
 
