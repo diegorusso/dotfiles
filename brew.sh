@@ -41,8 +41,9 @@ brew install grep
 brew install openssh
 brew install screen
 brew install tmux
-brew install python
 brew install watch
+brew install python3
+#brew install homebrew/php/php56 --with-gmp
 
 # Install font tools.
 #brew tap bramstein/webfonttools
