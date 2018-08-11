@@ -35,16 +35,14 @@ fi;
 # Install `wget` with IRI support.
 brew install wget --with-iri
 
-# Install GnuPG to enable PGP-signing commits.
-#brew install gnupg
-
 # Install more recent versions of some macOS tools.
 brew install vim --with-override-system-vi
 brew install grep
 brew install openssh
 brew install screen
-brew install python3
-#brew install homebrew/php/php56 --with-gmp
+brew install tmux
+brew install python
+brew install watch
 
 # Install font tools.
 #brew tap bramstein/webfonttools
@@ -68,6 +66,7 @@ brew install python3
 #brew install knock
 #brew install netpbm
 brew install nmap
+brew install mtr
 #brew install pngcheck
 #brew install socat
 #brew install sqlmap
