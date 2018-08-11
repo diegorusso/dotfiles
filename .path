@@ -1,3 +1,5 @@
+PATH="/usr/local/sbin:$PATH"
+
 # gnubin
 PATH="/usr/local/opt/coreutils/libexec/gnubin:$PATH"
 MANPATH="/usr/local/opt/coreutils/libexec/gnuman:$MANPATH"
@@ -12,3 +14,6 @@ MANPATH="/usr/local/opt/findutils/libexec/gnuman:$MANPATH"
 # gnu-sed
 PATH="/usr/local/opt/gnu-sed/libexec/gnubin:$PATH"
 MANPATH="/usr/local/opt/gnu-sed/libexec/gnuman:$MANPATH"
+
+# gnu-getopt
+PATH="/usr/local/opt/gnu-getopt/bin:$PATH"
