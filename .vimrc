@@ -129,7 +129,7 @@ set laststatus=2
 highlight ExtraWhitespace ctermbg=red guibg=red
 match ExtraWhitespace /\s\+$/
 
-function ShortTabLine()
+function! ShortTabLine()
     let ret = ''
     for i in range(tabpagenr('$'))
         " select the color group for highlighting active tab
