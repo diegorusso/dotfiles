@@ -162,17 +162,6 @@ endfunction
 
 set tabline=%!ShortTabLine()
 
-execute pathogen#infect()
-
-set statusline+=%#warningmsg#
-set statusline+=%{SyntasticStatuslineFlag()}
-set statusline+=%*
-
-let g:syntastic_always_populate_loc_list = 1
-let g:syntastic_auto_loc_list = 1
-let g:syntastic_check_on_open = 1
-let g:syntastic_check_on_wq = 0
-
 " Auto install plug.vim (plugin manager)
 if empty(glob('~/.vim/autoload/plug.vim'))
   silent !curl -fLo ~/.vim/autoload/plug.vim --create-dirs
@@ -187,9 +176,18 @@ call plug#begin('~/.vim/plugged')
 " Make sure you use single quotes
 
 Plug 'ambv/black',
+Plug 'vim-syntastic/syntastic',
 
 " Initialize plugin system
 call plug#end()
 
 " Enable black
 autocmd BufWritePre *.py execute ':Black'
+
+set statusline+=%#warningmsg#
+set statusline+=%{SyntasticStatuslineFlag()}
+set statusline+=%*
+let g:syntastic_always_populate_loc_list = 1
+let g:syntastic_auto_loc_list = 1
+let g:syntastic_check_on_open = 1
+let g:syntastic_check_on_wq = 0
