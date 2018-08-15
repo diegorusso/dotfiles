@@ -146,3 +146,6 @@ alias reload="exec ${SHELL} -l"
 
 # Print each PATH entry on a separate line
 alias path='echo -e ${PATH//:/\\n}'
+
+# This image lets you run black without installing python3.6 or messing up with virtualenv/pyenv.
+black() { docker run -v $(pwd):/code jbbarth/black $*; }
