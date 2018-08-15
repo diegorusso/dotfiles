@@ -175,14 +175,14 @@ endif
 call plug#begin('~/.vim/plugged')
 " Make sure you use single quotes
 
-Plug 'ambv/black',
+" Plug 'ambv/black',
 Plug 'vim-syntastic/syntastic',
 
 " Initialize plugin system
 call plug#end()
 
 " Enable black
-autocmd BufWritePre *.py execute ':Black'
+" autocmd BufWritePre *.py execute ':Black'
 
 set statusline+=%#warningmsg#
 set statusline+=%{SyntasticStatuslineFlag()}
