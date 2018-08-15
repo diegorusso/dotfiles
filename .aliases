@@ -148,4 +148,7 @@ alias reload="exec ${SHELL} -l"
 alias path='echo -e ${PATH//:/\\n}'
 
 # This image lets you run black without installing python3.6 or messing up with virtualenv/pyenv.
-black() { docker run -v $(pwd):/code jbbarth/black $*; }
+black() { docker run --rm -v $(pwd):/code jbbarth/black $*; }
+
+# This image lets you run shellcheck without installing shellcheck
+shellcheck() { docker run --rm -v $(pwd):/mnt koalaman/shellcheck:v0.4.6 $@; }
