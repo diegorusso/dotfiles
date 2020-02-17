@@ -10,6 +10,8 @@ if has("autocmd")
     autocmd BufNewFile,BufRead *.json setfiletype json syntax=javascript
     " Treat .md files as Markdown
     autocmd BufNewFile,BufRead *.md setlocal filetype=markdown
+    " Treat .jenkinsfile as groovy files
+    autocmd BufNewFile,BufRead *.jenkinsfile setlocal filetype=groovy
 
     autocmd FileType python,java,c,xml set wrap nospell
     autocmd FileType htmldjango,html,css,javascript setlocal tabstop=2 shiftwidth=2 softtabstop=2
