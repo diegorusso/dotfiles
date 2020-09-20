@@ -37,6 +37,8 @@ set backspace=indent,eol,start  " Allow backspace in insert mode
 set ttyfast             " Optimize for fast terminal connections
 set gdefault            " Add the g flag to search/replace by default
 set encoding=utf-8 nobomb   " Use UTF-8 without BOM
+set shortmess=a
+set cmdheight=2
 
 let mapleader=","       " Change mapleader
 
@@ -184,7 +186,7 @@ Plug 'vim-syntastic/syntastic',
 call plug#end()
 
 " Enable black
-autocmd BufWritePre *.py execute ':Black'
+" autocmd BufWritePre *.py execute ':Black'
 
 set statusline+=%#warningmsg#
 set statusline+=%{SyntasticStatuslineFlag()}
@@ -194,3 +196,6 @@ let g:syntastic_always_populate_loc_list = 1
 let g:syntastic_auto_loc_list = 1
 let g:syntastic_check_on_open = 1
 let g:syntastic_check_on_wq = 0
+let g:syntastic_sh_shellcheck_args = "-x -e SC1091"
+
+" let g:black_linelength = 120
