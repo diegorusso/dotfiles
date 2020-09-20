@@ -182,6 +182,9 @@ call plug#begin('~/.vim/plugged')
 Plug 'psf/black', { 'tag': '19.10b0' }
 Plug 'vim-syntastic/syntastic',
 
+" A Vim Plugin for Lively Previewing LaTeX PDF Output
+Plug 'xuhdev/vim-latex-live-preview', { 'for': 'tex' }
+
 " Initialize plugin system
 call plug#end()
 
@@ -199,3 +202,7 @@ let g:syntastic_check_on_wq = 0
 let g:syntastic_sh_shellcheck_args = "-x -e SC1091"
 
 " let g:black_linelength = 120
+
+" Tex stuff
+autocmd Filetype tex setl updatetime=1
+let g:livepreview_previewer = 'open -a Preview'
