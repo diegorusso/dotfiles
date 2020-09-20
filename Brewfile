@@ -1,0 +1,15 @@
+brew 'bash'
+brew 'bash-completion'
+brew 'shellcheck'
+brew 'wget'
+brew 'vim'
+brew 'screen'
+brew 'tmux'
+brew 'python'
+brew 'htop'
+brew 'git'
+brew 'git-lfs'
+brew 'keychain'
+
+cask 'basictex'
+
