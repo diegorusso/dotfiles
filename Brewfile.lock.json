@@ -230,10 +230,16 @@
       }
     },
     "cask": {
-      "basictex": {
+      "mactex-no-gui": {
         "version": "2020.0407",
         "options": {
-          "full_name": "basictex"
+          "full_name": "mactex-no-gui"
+        }
+      },
+      "inkscape": {
+        "version": "1.0.1",
+        "options": {
+          "full_name": "inkscape"
         }
       }
     }
@@ -247,6 +253,14 @@
         "CLT": "12.0.0.0.1.1599194153",
         "Xcode": "12.0",
         "macOS": "10.15.6"
+      },
+      "big_sur": {
+        "HOMEBREW_VERSION": "2.5.2",
+        "HOMEBREW_PREFIX": "/usr/local",
+        "Homebrew/homebrew-core": "bac6904fef5f44b25d9bcdb3f0239db8548d8f09",
+        "CLT": "12.0.0.0.1.1599194153",
+        "Xcode": "12.0",
+        "macOS": "11.0"
       }
     }
   }
