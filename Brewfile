@@ -11,5 +11,6 @@ brew 'git'
 brew 'git-lfs'
 brew 'keychain'
 
-cask 'basictex'
+cask 'mactex-no-gui'
+cask 'inkscape'
 

@@ -90,8 +90,6 @@ set title               " Show the filename in the window titlebar
 set showcmd             " Show the (partial) command as it’s being typed
 
 set autoread        " Set to auto read when a file is changed from the outside
-set nospell         " disaable the English spell
-set spellsuggest=15
 set foldmethod=indent " activate folding
 set nofoldenable    " no folding enabled at the beginning
 set lazyredraw      " Don't redraw while executing macros (good performance config)
@@ -181,9 +179,7 @@ call plug#begin('~/.vim/plugged')
 
 Plug 'psf/black', { 'tag': '19.10b0' }
 Plug 'vim-syntastic/syntastic',
-
-" A Vim Plugin for Lively Previewing LaTeX PDF Output
-Plug 'xuhdev/vim-latex-live-preview', { 'for': 'tex' }
+Plug 'lervag/vimtex'
 
 " Initialize plugin system
 call plug#end()
@@ -203,6 +199,9 @@ let g:syntastic_sh_shellcheck_args = "-x -e SC1091"
 
 " let g:black_linelength = 120
 
-" Tex stuff
-autocmd Filetype tex setl updatetime=1
-let g:livepreview_previewer = 'open -a Preview'
+" https://github.com/vim-syntastic/syntastic/issues/2169
+let g:syntastic_tex_lacheck_quiet_messages = { 'regex': '\Vpossible unwanted space at' }
+let g:tex_flavor = 'latex'
+
+set spelllang=en_gb,it spellsuggest=15
+autocmd FileType latex,tex,md,markdown setlocal spell
