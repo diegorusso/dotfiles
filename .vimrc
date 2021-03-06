@@ -177,7 +177,7 @@ endif
 call plug#begin('~/.vim/plugged')
 " Make sure you use single quotes
 
-Plug 'psf/black', { 'tag': '19.10b0' }
+Plug 'psf/black',
 Plug 'vim-syntastic/syntastic',
 Plug 'lervag/vimtex'
 

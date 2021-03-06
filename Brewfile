@@ -1,9 +1,7 @@
 brew 'bash'
 brew 'bash-completion'
-brew 'shellcheck'
 brew 'wget'
 brew 'vim'
-brew 'screen'
 brew 'tmux'
 brew 'python'
 brew 'htop'
@@ -13,4 +11,5 @@ brew 'keychain'
 
 cask 'mactex-no-gui'
 cask 'inkscape'
+cask 'itsycal'
 
