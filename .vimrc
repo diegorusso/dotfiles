@@ -1,6 +1,6 @@
 " Use the PaachPuff theme
-colorscheme peachpuff
-set background=dark
+" colorscheme peachpuff
+" set background=dark
 
 " Automatic commands
 if has("autocmd")
