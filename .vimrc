@@ -177,31 +177,10 @@ endif
 call plug#begin('~/.vim/plugged')
 " Make sure you use single quotes
 
-Plug 'psf/black',
-Plug 'vim-syntastic/syntastic',
-Plug 'lervag/vimtex'
+" Plug 'dense-analysis/ale'
 
 " Initialize plugin system
 call plug#end()
 
-" Enable black
-" autocmd BufWritePre *.py execute ':Black'
-
-set statusline+=%#warningmsg#
-set statusline+=%{SyntasticStatuslineFlag()}
-set statusline+=%*
-let g:syntastic_python_python_exec = 'python3'
-let g:syntastic_always_populate_loc_list = 1
-let g:syntastic_auto_loc_list = 1
-let g:syntastic_check_on_open = 1
-let g:syntastic_check_on_wq = 0
-let g:syntastic_sh_shellcheck_args = "-x -e SC1091"
-
-" let g:black_linelength = 120
-
-" https://github.com/vim-syntastic/syntastic/issues/2169
-let g:syntastic_tex_lacheck_quiet_messages = { 'regex': '\Vpossible unwanted space at' }
-let g:tex_flavor = 'latex'
-
 set spelllang=en_gb,it spellsuggest=15
-autocmd FileType latex,tex,md,markdown setlocal spell
+autocmd FileType md,markdown setlocal spell
