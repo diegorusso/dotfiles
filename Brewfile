@@ -9,7 +9,8 @@ brew 'git'
 brew 'git-lfs'
 brew 'keychain'
 
-cask 'mactex-no-gui'
-cask 'inkscape'
 cask 'itsycal'
+cask 'utm'
+cask 'cyberduck'
+cask 'the-unarchiver'
 
