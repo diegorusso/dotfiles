@@ -7,7 +7,7 @@ if has("autocmd")
     " Enable file type detection
     filetype plugin indent on
     " Treat .json files as .js
-    autocmd BufNewFile,BufRead *.json setfiletype json syntax=javascript
+    autocmd BufNewFile,BufRead *.json setlocal filetype=json syntax=javascript
     " Treat .md files as Markdown
     autocmd BufNewFile,BufRead *.md setlocal filetype=markdown
     " Treat .jenkinsfile as groovy files
@@ -80,7 +80,7 @@ set hlsearch            " Highlight searches
 set ignorecase          " Ignore case of searches
 set incsearch           " Highlight dynamically as pattern is typed
 set laststatus=2        " Always show status line
-"set mouse=a             " Enable mouse in all modes
+set mouse=a             " Enable mouse in all modes
 set noerrorbells        " Disable error bells
 set nostartofline       " Don’t reset cursor to start of line when moving around.
 set ruler               " Show the cursor position
@@ -177,10 +177,16 @@ endif
 call plug#begin('~/.vim/plugged')
 " Make sure you use single quotes
 
-" Plug 'dense-analysis/ale'
+Plug 'ojroques/vim-oscyank', {'branch': 'main'}
+Plug 'neoclide/coc.nvim', {'branch': 'release'}
 
 " Initialize plugin system
 call plug#end()
+
+" Config for OSCYank
+nmap <leader>c <Plug>OSCYankOperator
+nmap <leader>cc <leader>c_
+vmap <leader>c <Plug>OSCYankVisual
 
 set spelllang=en_gb,it spellsuggest=15
 autocmd FileType md,markdown setlocal spell
