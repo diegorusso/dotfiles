@@ -1,7 +1,7 @@
 brew 'bash'
 brew 'bash-completion'
 brew 'wget'
-brew 'vim'
+brew 'nvim'
 brew 'tmux'
 brew 'python'
 brew 'htop'

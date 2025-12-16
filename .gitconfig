@@ -19,7 +19,7 @@
 	c = clone --recursive
 
 	# Commit all changes.
-	ca = !git add ':(exclude,attr:builtin_objectmode=160000)' && git commit -av
+	ca = !git add -A && git commit -av
 
 	# Switch to a branch, creating it if necessary.
 	go = "!f() { git checkout -b \"$1\" 2> /dev/null || git checkout \"$1\"; }; f"
@@ -73,6 +73,8 @@
     st = status
     br = branch
     hist = log --pretty=format:\"%h %ad | %s%d [%an]\" --graph --date=short
+
+	rgrep = !git grep -i
 
 [apply]
 
@@ -167,6 +169,7 @@
 	default = simple
 	# Make `git push` push relevant annotated tags when pushing branches out.
 	followTags = true
+	autoSetupRemote = true
 
 [http]
     sslverify = false

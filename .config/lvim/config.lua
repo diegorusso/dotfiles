@@ -21,3 +21,8 @@ lvim.format_on_save = false
 vim.diagnostic.config({ virtual_text = true })
 lvim.builtin.treesitter.highlight.enable = true
 lvim.builtin.treesitter.ensure_installed = { "cpp", "c", "python" }
+
+-- Disable autopairs completion
+lvim.builtin.autopairs.on_config_done = function(module)
+  require('nvim-autopairs').disable()
+end
