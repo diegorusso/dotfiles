@@ -12,5 +12,4 @@ brew 'docker'
 brew 'docker-completion'
 brew 'uv'
 
-
 cask 'font-hack-nerd-font'

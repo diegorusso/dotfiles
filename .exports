@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Make lvim (LunarVim) the default editor.
-export EDITOR='lvim';
+# Make nvim the default editor.
+export EDITOR='nvim';
 
 # Enable persistent REPL history for `node`.
 export NODE_REPL_HISTORY=~/.node_history;
