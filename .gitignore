@@ -1,17 +1,15 @@
-# Compiled Python files
-*.pyc
+# Editor/runtime files
+.nvimlog
+*.swp
 
-# Folder view configuration files
+# OS-generated metadata
 .DS_Store
-Desktop.ini
-
-# Thumbnail cache files
 ._*
+.Spotlight-V100/
+.Trashes/
+Desktop.ini
 Thumbs.db
 
-# Files that might appear on external disks
-.Spotlight-V100
-.Trashes
-
-# File which contains local customizations
-.extra
+# Python bytecode and interpreter caches
+__pycache__/
+*.py[cod]

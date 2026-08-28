@@ -1,56 +1,116 @@
 #!/usr/bin/env bash
-set -eu
+set -euo pipefail
 
 DIR="${1:-$HOME}"
-PRESET="${2:-default}"
 
-if [ ! -d "$DIR" ]; then
-  tmux display-message "Not a directory: $DIR"
+message() {
+  tmux display-message "$*" 2>/dev/null || printf '%s\n' "$*" >&2
+}
+
+if ! command -v tmux >/dev/null 2>&1; then
+  printf 'Development layout requires tmux.\n' >&2
   exit 1
 fi
 
-case "$PRESET" in
-  cpython)
-    CMD0='nvim'
-    CMD1=''
-    CMD2='codex resume --last || codex'
-    ;;
-  ci-scripts)
-    CMD0='nvim'
-    CMD1=''
-    CMD2='codex resume --last || codex'
-    ;;
-  default)
-    CMD0='nvim'
-    CMD1=''
-    CMD2='codex resume --last || codex'
-    ;;
-  *)
-    tmux display-message "Unknown preset: $PRESET"
-    exit 1
-    ;;
-esac
+if [ -z "${TMUX:-}" ]; then
+  printf 'Development layout must be run from inside tmux.\n' >&2
+  exit 1
+fi
+
+if [ ! -d "$DIR" ]; then
+  message "Not a directory: $DIR"
+  exit 1
+fi
+
+DIR="$(CDPATH='' cd -- "$DIR" && pwd -P)"
+
+EDITOR_CMD="$(tmux show-option -gqv @dev-editor-command 2>/dev/null || true)"
+ASSISTANT_CMD="$(tmux show-option -gqv @dev-assistant-command 2>/dev/null || true)"
+EDITOR_CMD="${EDITOR_CMD:-nvim}"
+ASSISTANT_CMD="${ASSISTANT_CMD:-codex resume --last || codex}"
+
+command_program() {
+  local command_string="$1"
+  local program="${command_string%%[[:space:]]*}"
+  command -v "$program" >/dev/null 2>&1
+}
+
+send_command() {
+  local pane_id="$1"
+  local command_string="$2"
+
+  tmux send-keys -t "$pane_id" -l "$command_string"
+  tmux send-keys -t "$pane_id" Enter
+}
+
+WINDOW_ID=''
+cleanup_partial_window() {
+  local status="$?"
+
+  if [ "$status" -ne 0 ] && [ -n "$WINDOW_ID" ]; then
+    tmux kill-window -t "$WINDOW_ID" 2>/dev/null || true
+  fi
+}
+trap cleanup_partial_window EXIT
 
 NAME="$(basename "$DIR")"
 WIN_NAME="${NAME}-dev"
 
-# If the window already exists in the current session, switch to it
-if tmux list-windows -F '#{window_name}' | grep -qx "$WIN_NAME"; then
-  tmux select-window -t "$WIN_NAME"
+# Resolve the invoking session once and target everything by stable tmux IDs.
+if [ -n "${TMUX_PANE:-}" ]; then
+  SESSION_ID="$(tmux display-message -p -t "$TMUX_PANE" '#{session_id}')"
+else
+  SESSION_ID="$(tmux display-message -p '#{session_id}')"
+fi
+
+# Reuse only a window created for this exact repository, even when two
+# repositories share the same basename.
+EXISTING_WINDOW=''
+while IFS= read -r window_id; do
+  [ -n "$window_id" ] || continue
+  repo_path="$(tmux show-option -wqv -t "$window_id" @repo-path 2>/dev/null || true)"
+  if [ "$repo_path" = "$DIR" ]; then
+    EXISTING_WINDOW="$window_id"
+    break
+  fi
+done < <(tmux list-windows -t "$SESSION_ID" -F '#{window_id}')
+
+if [ -n "$EXISTING_WINDOW" ]; then
+  tmux select-window -t "$EXISTING_WINDOW"
   exit 0
 fi
 
-# Create the window
-tmux new-window -n "$WIN_NAME" -c "$DIR"
+# Capture the first pane and derive the window ID from it, avoiding ambiguous
+# numeric pane indexes and window names.
+PANE0="$(tmux new-window -P -F '#{pane_id}' -t "$SESSION_ID:" -n "$WIN_NAME" -c "$DIR")"
+WINDOW_ID="$(tmux display-message -p -t "$PANE0" '#{window_id}')"
+tmux set-option -wq -t "$WINDOW_ID" @repo-path "$DIR"
 
 # Create 3 side-by-side panes
-tmux split-window -h -c "$DIR"
-tmux split-window -h -c "$DIR"
+PANE1="$(tmux split-window -P -F '#{pane_id}' -t "$PANE0" -h -c "$DIR")"
+PANE2="$(tmux split-window -P -F '#{pane_id}' -t "$PANE1" -h -c "$DIR")"
 
 # Equal-width columns
-tmux select-layout even-horizontal
+tmux select-layout -t "$WINDOW_ID" even-horizontal
 
-# Run commands
-tmux send-keys -t 0 "$CMD0" C-m
-tmux send-keys -t 1 "$CMD1" C-m
-tmux send-keys -t 2 "$CMD2" C-m
+# Optional tools leave a normal shell behind when they are unavailable.
+MISSING=''
+if command_program "$EDITOR_CMD"; then
+  send_command "$PANE0" "$EDITOR_CMD"
+else
+  MISSING="${EDITOR_CMD%%[[:space:]]*}"
+fi
+
+if command_program "$ASSISTANT_CMD"; then
+  send_command "$PANE2" "$ASSISTANT_CMD"
+else
+  MISSING="${MISSING:+$MISSING, }${ASSISTANT_CMD%%[[:space:]]*}"
+fi
+
+tmux select-pane -t "$PANE0"
+
+if [ -n "$MISSING" ]; then
+  message "Layout opened; optional commands not found: $MISSING"
+fi
+
+trap - EXIT

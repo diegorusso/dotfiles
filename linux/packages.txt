@@ -1,0 +1,22 @@
+# Shared CLI dependencies available from Debian/Raspberry Pi OS repositories.
+bash-completion
+build-essential
+curl
+dnsutils
+file
+fzf
+gdb
+git
+git-lfs
+htop
+iproute2
+less
+neovim
+openssl
+python3
+ripgrep
+shellcheck
+tmux
+tree
+unzip
+wget

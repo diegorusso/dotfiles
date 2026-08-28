@@ -1,9 +1,0 @@
-PATH="$HOME/.local/bin:$PATH";
-
-PATH="/usr/local/sbin:$PATH"
-
-# gettext
-PATH="/usr/local/opt/gettext/bin:$PATH"
-
-# sqlite
-PATH="/usr/local/opt/sqlite/bin:$PATH"

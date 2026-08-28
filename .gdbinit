@@ -1,5 +1,6 @@
 add-auto-load-safe-path /
 set history save
+set history filename ~/.gdb_history
 set verbose off
 set print pretty on
 set print array off

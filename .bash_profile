@@ -1,53 +1,35 @@
-# Add `~/bin` to the `$PATH`
-export PATH="$HOME/bin:$PATH";
+# shellcheck shell=bash
 
-# Load the shell dotfiles, and then some:
-# * ~/.path can be used to extend `$PATH`.
-# * ~/.extra can be used for other settings you don’t want to commit.
-for file in ~/.{path,bash_prompt,exports,aliases,functions,extra}; do
-	[ -r "$file" ] && [ -f "$file" ] && source "$file";
-done;
-unset file;
+# Preserve host- or administrator-provided login setup. A guard in .bashrc
+# prevents a conventional .profile from initializing the interactive layer
+# early when it sources .bashrc itself.
+if [[ -z ${DOTFILES_PROFILE_LOADED:-} && -r "$HOME/.profile" ]]; then
+	DOTFILES_PROFILE_LOADED=1
+	# Read by .bashrc while the separately managed .profile is being sourced.
+	# shellcheck disable=SC2034
+	DOTFILES_LOADING_PROFILE=1
+	# shellcheck source=/dev/null
+	source "$HOME/.profile"
+	unset DOTFILES_LOADING_PROFILE
+fi
 
-# Case-insensitive globbing (used in pathname expansion)
-shopt -s nocaseglob;
+# Environment belongs in login shells; prompts, aliases, and completions do not.
+if [[ -r "$HOME/.config/dotfiles/shell/env.bash" ]]; then
+	# shellcheck source=/dev/null
+	source "$HOME/.config/dotfiles/shell/env.bash"
+fi
 
-# Append to the Bash history file, rather than overwriting it
-shopt -s histappend;
+# Bash does not read .bashrc for login shells, so load it explicitly when the
+# login shell is interactive.
+if [[ $- == *i* && -r "$HOME/.bashrc" ]]; then
+	# shellcheck source=/dev/null
+	source "$HOME/.bashrc"
+fi
 
-# Autocorrect typos in path names when using `cd`
-shopt -s cdspell;
-
-# Enable some Bash 4 features when possible:
-# * `autocd`, e.g. `**/qux` will enter `./foo/bar/baz/qux`
-# * Recursive globbing, e.g. `echo **/*.txt`
-for option in autocd globstar; do
-	shopt -s "$option" 2> /dev/null;
-done;
-
-# Add tab completion for many Bash commands
-if which brew &> /dev/null && [ -r "$(brew --prefix)/etc/profile.d/bash_completion.sh" ]; then
-	# Ensure existing Homebrew v1 completions continue to work
-	export BASH_COMPLETION_COMPAT_DIR="$(brew --prefix)/etc/bash_completion.d";
-	source "$(brew --prefix)/etc/profile.d/bash_completion.sh";
-elif [ -f /etc/bash_completion ]; then
-	source /etc/bash_completion;
-fi;
-
-# Enable tab completion for `g` by marking it as an alias for `git`
-if type _git &> /dev/null; then
-	complete -o default -o nospace -F _git g;
-fi;
-
-# Add tab completion for SSH hostnames based on ~/.ssh/config, ignoring wildcards
-[ -e "$HOME/.ssh/config" ] && complete -o "default" -o "nospace" -W "$(grep "^Host" ~/.ssh/config | grep -v "[?*]" | cut -d " " -f2- | tr ' ' '\n')" scp sftp ssh;
-
-# Add tab completion for `defaults read|write NSGlobalDomain`
-# You could just use `-g` instead, but I like being explicit
-complete -W "NSGlobalDomain" defaults;
-
-# Add `killall` tab completion for common apps
-complete -o "nospace" -W "Contacts Calendar Dock Finder Mail Safari iTunes SystemUIServer Terminal Twitter" killall;
-
-# Default file permission: -rw-r--r--
-umask 022
+# Interactive shells normally load the local overlay from .bashrc; the guard in
+# local.bash makes this second source a no-op and also supports non-interactive
+# login shells.
+if [[ -r "$HOME/.config/dotfiles/shell/local.bash" ]]; then
+	# shellcheck source=/dev/null
+	source "$HOME/.config/dotfiles/shell/local.bash"
+fi
