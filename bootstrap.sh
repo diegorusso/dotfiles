@@ -205,6 +205,17 @@ manifest=(
 	'.tmux/load-tpm.sh' '.tmux/load-tpm.sh'
 )
 
+if [[ $platform == macos ]]; then
+	manifest+=(
+		'.config/ghostty/config.ghostty'
+		'Library/Application Support/com.mitchellh.ghostty/config.ghostty'
+	)
+elif [[ $platform == linux ]]; then
+	manifest+=(
+		'.config/ghostty/config.ghostty' '.config/ghostty/config.ghostty'
+	)
+fi
+
 # Managed directories are assembled from exact file lists before installation.
 # This prevents an ignored editor cache, local override, or other untracked file
 # beneath one of these source directories from leaking into HOME.
@@ -254,6 +265,8 @@ restore_allowed_paths=(
 	.tmux.conf
 	.wgetrc
 	.config/starship.toml
+	.config/ghostty/config.ghostty
+	'Library/Application Support/com.mitchellh.ghostty/config.ghostty'
 	.tmux/load-tpm.sh
 	.tmux/plugins/tpm
 	.local/share/nvim

@@ -281,6 +281,13 @@ check_bootstrap_platform() {
 		exit 1
 	fi
 	cmp -s .config/starship.toml "$check_home/.config/starship.toml"
+	if [[ $platform == macos ]]; then
+		cmp -s .config/ghostty/config.ghostty \
+			"$check_home/Library/Application Support/com.mitchellh.ghostty/config.ghostty"
+	else
+		cmp -s .config/ghostty/config.ghostty \
+			"$check_home/.config/ghostty/config.ghostty"
+	fi
 	cmp -s .gitignore "$check_home/.gitignore"
 	cmp -s macos/interactive.bash \
 		"$check_home/.config/dotfiles/shell/platform/macos.bash"

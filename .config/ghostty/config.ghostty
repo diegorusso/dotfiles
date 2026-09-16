@@ -1,0 +1,31 @@
+# Visual configuration
+theme = GitHub Dark
+window-theme = system
+window-new-tab-position = end
+macos-titlebar-style = tabs
+unfocused-split-opacity = 0.6
+background-opacity = 0.85
+background-blur=16
+background=#000000
+
+# Typography
+font-size=12
+font-thicken=true
+font-thicken-strength=1
+adjust-cell-height=1
+
+# Keybindings
+# super==cmd, alt==opt
+# move between tabs is cmd+alt+arrow
+keybind = super+alt+left=previous_tab
+keybind = super+alt+right=next_tab
+
+# Misc settings
+shell-integration = bash
+shell-integration-features = no-cursor
+copy-on-select = clipboard
+quit-after-last-window-closed = true
+# scrollback-limit in bytes, roughly 125,000 lines
+scrollback-limit = 10000000
+# allow clickable links with cmd+shift
+mouse-shift-capture = false
