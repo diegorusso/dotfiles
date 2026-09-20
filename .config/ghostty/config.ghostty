@@ -2,7 +2,7 @@
 theme = GitHub Dark
 window-theme = system
 window-new-tab-position = end
-macos-titlebar-style = tabs
+macos-titlebar-style = native
 unfocused-split-opacity = 0.6
 background-opacity = 0.85
 background-blur=16
