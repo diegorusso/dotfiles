@@ -275,13 +275,19 @@ The tracked `.config/nvim` is a complete
 user configuration, pinned for machines that still use Neovim 0.10. Bootstrap
 backs up the whole existing Neovim configuration before replacing it.
 
+Neovim 0.11 and newer use Aerial 3.1.0 and `lazy-lock.json`, which includes the
+fix for the Tree-sitter API change in Neovim 0.12. Neovim 0.10 uses Aerial 2.7.0
+and `lazy-lock-nvim-0.10.json` to retain compatibility. The configuration selects
+the matching version and lock file automatically.
+
 When AstroNvim is absent and the standard `~/.local/share/nvim` data location
 is absent or empty, `--apply` runs the tracked configuration in isolated
 temporary XDG directories and asks Lazy to restore the revisions in
-`lazy-lock.json`. Bootstrap then starts the complete configuration through
-`VimEnter` and verifies every locked plugin directory and Git revision before
-installing the data tree. These downloads use a private temporary Git home
-with certificate verification enabled, so unsafe user-global Git settings are
+the lock file selected for the installed Neovim version. Bootstrap then starts
+the complete configuration through `VimEnter` and verifies every locked plugin
+directory and Git revision before installing the data tree. These downloads
+use a private temporary Git home with certificate verification enabled, so
+unsafe user-global Git settings are
 not inherited. An empty standard Neovim data directory is backed up and
 replaced as one reversible target. A non-empty, linked, or otherwise
 non-standard data target is preserved, and an existing AstroNvim installation

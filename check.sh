@@ -134,16 +134,50 @@ package.loaded["astrolsp.utils"] = {
 assert(semantic_tokens_cond(expected_client, 17) == false)
 LUA
 	printf 'PASS AstroLSP cross-version callbacks\n'
+
+	DOTFILES_NVIM_CONFIG="$repo_dir/.config/nvim" NVIM_LOG_FILE=/dev/null \
+		nvim --headless --clean -u NONE -i NONE -l /dev/stdin <<'LUA'
+local config_dir = vim.env.DOTFILES_NVIM_CONFIG
+for _, minor in ipairs { 10, 11, 12 } do
+  vim.fn.has = function(feature)
+    assert(feature == "nvim-0.11")
+    return minor >= 11 and 1 or 0
+  end
+  vim.fn.stdpath = function(kind)
+    assert(kind == "config")
+    return config_dir
+  end
+  package.loaded.lazy = {
+    setup = function(specs, opts)
+      local expected_version = minor == 10 and "2.7.0" or "3.1.0"
+      local expected_commit = minor == 10 and "5c4e2da4486da5f9b798ea9a0f1fc5c6bcd3d9cf"
+        or "645d108a5242ec7b378cbe643eb6d04d4223f034"
+      local aerial
+      for _, spec in ipairs(specs) do
+        if spec[1] == "stevearc/aerial.nvim" then aerial = spec end
+      end
+      assert(aerial and aerial.version == expected_version, "Wrong Aerial version for Neovim 0." .. minor)
+      local lock = vim.json.decode(table.concat(vim.fn.readfile(opts.lockfile), "\n"))
+      assert(lock["aerial.nvim"].commit == expected_commit, "Aerial version and restore lock disagree")
+    end,
+  }
+  dofile(config_dir .. "/lua/lazy_setup.lua")
+end
+LUA
+	printf 'PASS Aerial version and restore lock selection for Neovim 0.10, 0.11, and 0.12\n'
 else
 	printf 'SKIP Neovim Lua syntax (nvim not installed)\n'
 	printf 'SKIP AstroLSP cross-version callbacks (nvim not installed)\n'
+	printf 'SKIP Aerial version and restore lock selection (nvim not installed)\n'
 fi
 
 if command -v jq >/dev/null 2>&1; then
-	jq -e 'type == "object" and length > 0' .config/nvim/lazy-lock.json >/dev/null
+	jq -e 'type == "object" and length > 0' .config/nvim/lazy-lock*.json >/dev/null
 	printf 'PASS Neovim lock JSON\n'
 elif command -v python3 >/dev/null 2>&1; then
-	python3 -m json.tool .config/nvim/lazy-lock.json >/dev/null
+	for lock_file in .config/nvim/lazy-lock*.json; do
+		python3 -m json.tool "$lock_file" >/dev/null
+	done
 	printf 'PASS Neovim lock JSON\n'
 else
 	printf 'SKIP Neovim lock JSON (jq and python3 not installed)\n'
@@ -810,6 +844,7 @@ printf '%s\n' \
 	'fi' \
 	'[[ -f $XDG_CONFIG_HOME/nvim/lazy-lock.json ]] || exit 65' \
 	'cmp -s "$CHECK_TRACKED_NVIM_LOCK" "$XDG_CONFIG_HOME/nvim/lazy-lock.json" || exit 66' \
+	'cmp -s "${CHECK_TRACKED_NVIM_LOCK%.json}-nvim-0.10.json" "$XDG_CONFIG_HOME/nvim/lazy-lock-nvim-0.10.json" || exit 66' \
 	'create_complete_tree() {' \
 	'  mkdir -p "$XDG_DATA_HOME/nvim/lazy/lazy.nvim/lua/lazy"' \
 	'  mkdir -p "$XDG_DATA_HOME/nvim/lazy/AstroNvim/lua/astronvim"' \
@@ -849,6 +884,10 @@ printf '%s\n' \
 	'  lock-change)' \
 	'    create_complete_tree' \
 	'    printf "{}\\n" >"$XDG_CONFIG_HOME/nvim/lazy-lock.json"' \
+	'    ;;' \
+	'  legacy-lock-change)' \
+	'    create_complete_tree' \
+	'    printf "{}\\n" >"$XDG_CONFIG_HOME/nvim/lazy-lock-nvim-0.10.json"' \
 	'    ;;' \
 	'  forbidden) exit 99 ;;' \
 	'  *) exit 67 ;;' \
@@ -1109,7 +1148,7 @@ cmp -s "$astro_empty_backup_snapshot" "$astro_empty_backup_current"
 
 astro_lock_snapshot="$check_root/astronvim-lazy-lock.snapshot"
 cp -p .config/nvim/lazy-lock.json "$astro_lock_snapshot"
-for astro_failure_mode in failure malformed lock-change health-no-marker; do
+for astro_failure_mode in failure malformed lock-change legacy-lock-change health-no-marker; do
 	astro_failure_home="$check_root/astronvim-$astro_failure_mode"
 	astro_failure_log="$check_root/astronvim-$astro_failure_mode.nvim.log"
 	mkdir -p "$astro_failure_home"
@@ -1139,6 +1178,10 @@ for astro_failure_mode in failure malformed lock-change health-no-marker; do
 			;;
 		lock-change)
 			grep -Fq 'AstroNvim installation unexpectedly changed lazy-lock.json' \
+				<<<"$astro_failure_output"
+			;;
+		legacy-lock-change)
+			grep -Fq 'AstroNvim installation unexpectedly changed lazy-lock-nvim-0.10.json' \
 				<<<"$astro_failure_output"
 			;;
 		health-no-marker)

@@ -12,12 +12,12 @@ local function validate()
     if not ok then error(("unable to load %s: %s"):format(module_name, message)) end
   end
 
-  local lock_path = vim.fn.stdpath "config" .. "/lazy-lock.json"
+  local lazy_config = require "lazy.core.config"
+  local lock_path = lazy_config.options.lockfile
   local lock_contents = table.concat(vim.fn.readfile(lock_path), "\n")
   local lock = vim.json.decode(lock_contents)
-  if type(lock) ~= "table" or next(lock) == nil then error "lazy-lock.json is empty" end
+  if type(lock) ~= "table" or next(lock) == nil then error(lock_path .. " is empty") end
 
-  local lazy_config = require "lazy.core.config"
   for plugin_name, locked in pairs(lock) do
     local plugin = lazy_config.plugins[plugin_name]
     if not plugin or type(plugin.dir) ~= "string" or vim.fn.isdirectory(plugin.dir) ~= 1 then

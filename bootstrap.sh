@@ -234,6 +234,7 @@ tmux_layout_files=(
 nvim_files=(
 	init.lua
 	lazy-lock.json
+	lazy-lock-nvim-0.10.json
 	lua/lazy_setup.lua
 	lua/plugins/astrocore.lua
 	lua/plugins/astrolsp.lua
@@ -733,14 +734,16 @@ stage_astronvim() {
 	)
 
 	validate_staged_astronvim() {
-		local special_entry
+		local special_entry lock_name
 
-		if ! cmp -s "$scratch_root/nvim/lazy-lock.json" \
-			"$config_home/nvim/lazy-lock.json"; then
-			printf '%s\n' \
-				'AstroNvim installation unexpectedly changed lazy-lock.json' >&2
-			return 1
-		fi
+		for lock_name in lazy-lock.json lazy-lock-nvim-0.10.json; do
+			if ! cmp -s "$scratch_root/nvim/$lock_name" \
+				"$config_home/nvim/$lock_name"; then
+				printf 'AstroNvim installation unexpectedly changed %s\n' \
+					"$lock_name" >&2
+				return 1
+			fi
+		done
 		if [[ ! -d $staged_data/lazy/lazy.nvim/lua/lazy || \
 			! -d $staged_data/lazy/AstroNvim/lua/astronvim || \
 			! -f $staged_data/lazy/AstroNvim/version.txt ]]; then
