@@ -13,6 +13,8 @@ Usage: ./bootstrap.sh [--dry-run | --apply] [-d | --diff]
 	-d, --diff     Show content and mode differences for changed managed dotfiles.
 	-h, --help     Show this help.
 
+Diffs use colour in terminals; set NO_COLOR=1 to disable it.
+
 The script never pulls this repository, runs apt, changes the login shell, or
 overwrites ~/.config/extra. Apply mode may run Homebrew's official
 installer (which can request sudo), and access GitHub to install a missing TPM
@@ -56,6 +58,11 @@ while (( $# > 0 )); do
 	esac
 	shift
 done
+
+diff_color=false
+if [[ -t 1 && ${TERM:-dumb} != dumb && -z ${NO_COLOR:-} ]]; then
+	diff_color=true
+fi
 
 if [[ -z ${HOME:-} || $HOME != /* || ! -d $HOME ]]; then
 	printf 'Refusing to run with an empty, relative, or missing HOME\n' >&2
@@ -450,16 +457,37 @@ ensure_diff_empty_directory() {
 	mkdir -p "$diff_empty_directory"
 }
 
+format_content_diff() {
+	if [[ $diff_color != true ]]; then
+		cat
+		return
+	fi
+	# Portable across GNU and BSD diff, including macOS's system tools.
+	awk '
+		BEGIN { reset = "\033[0m" }
+		{
+			color = ""
+			if ($0 ~ /^(diff |--- |\+\+\+ )/) color = "\033[1m"
+			else if ($0 ~ /^@@/) color = "\033[36m"
+			else if ($0 ~ /^\+/) color = "\033[32m"
+			else if ($0 ~ /^-/) color = "\033[31m"
+			if (color != "") printf "%s%s%s\n", color, $0, reset
+			else print
+		}
+	'
+}
+
 run_content_diff() {
-	local status
-	if diff "$@"; then
+	local statuses
+	if diff "$@" | format_content_diff; then
 		return 0
 	else
-		status=$?
+		statuses=("${PIPESTATUS[@]}")
 	fi
+	(( statuses[1] == 0 )) || return "${statuses[1]}"
 	# diff uses status 1 for an ordinary difference and values above 1 for an
 	# operational error.
-	(( status == 1 )) || return "$status"
+	(( statuses[0] == 1 )) || return "${statuses[0]}"
 }
 
 diff_is_external_tree() {

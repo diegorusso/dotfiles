@@ -56,6 +56,10 @@ changed managed dotfiles while keeping the selected mode unchanged:
 ./bootstrap.sh --apply --diff
 ```
 
+Diffs use green for additions, red for removals, and cyan for hunk headers when
+output goes to a terminal. Redirected or piped output stays plain; set
+`NO_COLOR=1` to disable colour in a terminal as well.
+
 Restore previews and applies accept the same flag. TPM and AstroNvim plugin
 data are summarized rather than dumped as recursive diffs; keeping dry runs
 offline means their upstream content is not fetched just to display a diff.
