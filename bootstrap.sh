@@ -289,10 +289,6 @@ if [[ $platform == macos ]]; then
 		'.config/ghostty/config.ghostty'
 		'Library/Application Support/com.mitchellh.ghostty/config.ghostty'
 	)
-elif [[ $platform == linux ]]; then
-	manifest+=(
-		'.config/ghostty/config.ghostty' '.config/ghostty/config.ghostty'
-	)
 fi
 
 # Managed directories are assembled from exact file lists before installation.
@@ -344,6 +340,7 @@ restore_allowed_paths=(
 	.tmux.conf
 	.wgetrc
 	.config/starship.toml
+	# Keep older Linux Ghostty backups restorable.
 	.config/ghostty/config.ghostty
 	'Library/Application Support/com.mitchellh.ghostty/config.ghostty'
 	.tmux/load-tpm.sh

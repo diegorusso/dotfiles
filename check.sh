@@ -705,8 +705,8 @@ check_bootstrap_platform() {
 		cmp -s .config/ghostty/config.ghostty \
 			"$check_home/Library/Application Support/com.mitchellh.ghostty/config.ghostty"
 	else
-		cmp -s .config/ghostty/config.ghostty \
-			"$check_home/.config/ghostty/config.ghostty"
+		[[ ! -e $check_home/.config/ghostty ]]
+		[[ ! -e "$check_home/Library/Application Support/com.mitchellh.ghostty" ]]
 	fi
 	cmp -s .gitignore "$check_home/.gitignore"
 	cmp -s macos/interactive.bash \

@@ -20,7 +20,7 @@ configuration are now specific to this fork.
 .bash_profile, .bashrc       small Bash entrypoints
 shell/                       shared environment and interactive Bash layers
 .config/starship.toml        shared Catppuccin Powerline prompt
-.config/ghostty/             saved Ghostty terminal settings
+.config/ghostty/             macOS-only Ghostty terminal settings
 .gitconfig, .gitignore       shared Git configuration and global ignore rules
 .tmux.conf, .tmux/           portable tmux configuration and layouts
 .config/nvim/                complete AstroNvim user configuration
@@ -310,11 +310,10 @@ and
 
 ## Ghostty
 
-The saved configuration lives in `.config/ghostty/config.ghostty`. Bootstrap
-installs it to `~/Library/Application Support/com.mitchellh.ghostty/config.ghostty`
-on macOS and `~/.config/ghostty/config.ghostty` on Linux, using the usual backup
-and restore workflow. These are Ghostty's
-[standard configuration locations](https://ghostty.org/docs/config#file-location).
+The macOS-only configuration lives in `.config/ghostty/config.ghostty`.
+On macOS, bootstrap installs it to
+`~/Library/Application Support/com.mitchellh.ghostty/config.ghostty`, using the
+usual backup and restore workflow. Linux bootstrap skips Ghostty.
 
 Edit the repository copy, then use `./bootstrap.sh --diff` to preview changes
 and `./bootstrap.sh --apply` to install them. If you edit settings through
