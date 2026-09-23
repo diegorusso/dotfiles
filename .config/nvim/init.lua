@@ -1,8 +1,13 @@
 -- Bootstrap the pinned lazy.nvim release, then load the AstroNvim configuration.
 
+local version = vim.version()
+if version.major ~= 0 or version.minor ~= 12 then
+  error(("This configuration requires Neovim 0.12.x (found %s)"):format(tostring(version)))
+end
+
 local lazy_path = vim.fn.stdpath "data" .. "/lazy/lazy.nvim"
 
-if not (vim.uv or vim.loop).fs_stat(lazy_path) then
+if not vim.uv.fs_stat(lazy_path) then
   local result = vim.fn.system {
     "git",
     "clone",

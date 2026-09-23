@@ -234,7 +234,6 @@ tmux_layout_files=(
 nvim_files=(
 	init.lua
 	lazy-lock.json
-	lazy-lock-nvim-0.10.json
 	lua/lazy_setup.lua
 	lua/plugins/astrocore.lua
 	lua/plugins/astrolsp.lua
@@ -648,16 +647,15 @@ check_neovim_version() {
 	local version_line parsed major minor
 
 	if ! command -v nvim >/dev/null 2>&1; then
-		printf '%s\n' 'AstroNvim installation requires Neovim 0.10 or newer' >&2
+		printf '%s\n' 'AstroNvim installation requires Neovim 0.12.x' >&2
 		return 1
 	fi
 	version_line=$(nvim --version 2>/dev/null | sed -n '1p') || return 1
 	parsed=$(printf '%s\n' "$version_line" |
 		sed -n 's/^NVIM v\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2/p')
 	read -r major minor <<<"$parsed"
-	if [[ -z ${major:-} || -z ${minor:-} ]] || \
-		(( major == 0 && minor < 10 )); then
-		printf 'AstroNvim requires Neovim 0.10 or newer (found: %s)\n' \
+	if [[ ${major:-} != 0 || ${minor:-} != 12 ]]; then
+		printf 'AstroNvim requires Neovim 0.12.x (found: %s)\n' \
 			"${version_line:-unknown}" >&2
 		return 1
 	fi
@@ -734,16 +732,13 @@ stage_astronvim() {
 	)
 
 	validate_staged_astronvim() {
-		local special_entry lock_name
+		local special_entry
 
-		for lock_name in lazy-lock.json lazy-lock-nvim-0.10.json; do
-			if ! cmp -s "$scratch_root/nvim/$lock_name" \
-				"$config_home/nvim/$lock_name"; then
-				printf 'AstroNvim installation unexpectedly changed %s\n' \
-					"$lock_name" >&2
-				return 1
-			fi
-		done
+		if ! cmp -s "$scratch_root/nvim/lazy-lock.json" \
+			"$config_home/nvim/lazy-lock.json"; then
+			printf '%s\n' 'AstroNvim installation unexpectedly changed lazy-lock.json' >&2
+			return 1
+		fi
 		if [[ ! -d $staged_data/lazy/lazy.nvim/lua/lazy || \
 			! -d $staged_data/lazy/AstroNvim/lua/astronvim || \
 			! -f $staged_data/lazy/AstroNvim/version.txt ]]; then
@@ -1462,7 +1457,7 @@ if [[ $mode == apply && $astronvim_install_required == true ]]; then
 		astronvim_skip_reason='Neovim is not installed'
 	elif ! check_neovim_version 2>/dev/null; then
 		astronvim_preinstall_unavailable=true
-		astronvim_skip_reason='Neovim 0.10 or newer is unavailable'
+		astronvim_skip_reason='Neovim 0.12.x is unavailable'
 	elif ! check_git_version; then
 		astronvim_preinstall_unavailable=true
 		astronvim_skip_reason='Git 2.19 or newer is unavailable'

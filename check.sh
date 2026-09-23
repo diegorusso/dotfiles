@@ -61,9 +61,8 @@ if command -v nvim >/dev/null 2>&1; then
 	nvim_version=$(NVIM_LOG_FILE=/dev/null nvim --version |
 		sed -n '1s/^NVIM v\([0-9][0-9]*\)\.\([0-9][0-9]*\).*/\1 \2/p')
 	read -r nvim_major nvim_minor <<<"$nvim_version"
-	if [[ -z ${nvim_major:-} || -z ${nvim_minor:-} ]] || \
-		(( nvim_major == 0 && nvim_minor < 10 )); then
-		printf 'FAIL Neovim 0.10 or newer is required (found: %s)\n' \
+	if [[ ${nvim_major:-} != 0 || ${nvim_minor:-} != 12 ]]; then
+		printf 'FAIL Neovim 0.12.x is required (found: %s)\n' \
 			"$(NVIM_LOG_FILE=/dev/null nvim --version | sed -n '1p')" >&2
 		exit 1
 	fi
@@ -99,22 +98,14 @@ local semantic_tokens_cond = spec.opts.mappings.n["<Leader>uY"].cond
 
 package.loaded.astrolsp = { config = { features = { codelens = true } } }
 
-local refreshed = false
-vim.lsp.codelens.enable = nil
-vim.lsp.codelens.refresh = function(opts)
-  assert(opts.bufnr == 17)
-  refreshed = true
-end
-callback { buf = 17 }
-assert(refreshed)
-
+assert(type(vim.lsp.codelens.enable) == "function")
 local enabled = false
 vim.lsp.codelens.enable = function(value, opts)
   assert(value == true)
   assert(opts.bufnr == 17)
   enabled = true
 end
-vim.lsp.codelens.refresh = function() error "refresh called when enable is available" end
+vim.lsp.codelens.refresh = function() error "deprecated codelens refresh called" end
 callback { buf = 17 }
 assert(enabled)
 
@@ -123,61 +114,72 @@ vim.lsp.codelens.enable = function() error "codelens called while disabled" end
 callback { buf = 17 }
 
 local expected_client = {}
-package.loaded["astrolsp.utils"] = {
-  supports_method = function(client, method, bufnr)
-    assert(client == expected_client)
-    assert(method == "textDocument/semanticTokens/full")
-    assert(bufnr == 17)
-    return false
-  end,
-}
+local supported = false
+expected_client.supports_method = function(client, method, bufnr)
+  assert(client == expected_client)
+  assert(method == "textDocument/semanticTokens/full")
+  assert(bufnr == 17)
+  return supported
+end
 assert(semantic_tokens_cond(expected_client, 17) == false)
+supported = true
+assert(semantic_tokens_cond(expected_client, 17) == true)
 LUA
-	printf 'PASS AstroLSP cross-version callbacks\n'
+	printf 'PASS AstroLSP Neovim 0.12 callbacks\n'
+
+	DOTFILES_ASTROCORE_CHECK="$repo_dir/.config/nvim/lua/plugins/astrocore.lua" \
+		NVIM_LOG_FILE=/dev/null nvim --headless --clean -u NONE -i NONE -l /dev/stdin <<'LUA'
+local spec = assert(loadfile(vim.env.DOTFILES_ASTROCORE_CHECK))()
+for option, value in pairs(spec.opts.options.opt) do
+  vim.opt[option] = value
+end
+LUA
+	printf 'PASS AstroCore option values\n'
 
 	DOTFILES_NVIM_CONFIG="$repo_dir/.config/nvim" NVIM_LOG_FILE=/dev/null \
 		nvim --headless --clean -u NONE -i NONE -l /dev/stdin <<'LUA'
 local config_dir = vim.env.DOTFILES_NVIM_CONFIG
-for _, minor in ipairs { 10, 11, 12 } do
-  vim.fn.has = function(feature)
-    assert(feature == "nvim-0.11")
-    return minor >= 11 and 1 or 0
-  end
-  vim.fn.stdpath = function(kind)
-    assert(kind == "config")
-    return config_dir
-  end
-  package.loaded.lazy = {
-    setup = function(specs, opts)
-      local expected_version = minor == 10 and "2.7.0" or "3.1.0"
-      local expected_commit = minor == 10 and "5c4e2da4486da5f9b798ea9a0f1fc5c6bcd3d9cf"
-        or "645d108a5242ec7b378cbe643eb6d04d4223f034"
-      local aerial
-      for _, spec in ipairs(specs) do
-        if spec[1] == "stevearc/aerial.nvim" then aerial = spec end
-      end
-      assert(aerial and aerial.version == expected_version, "Wrong Aerial version for Neovim 0." .. minor)
-      local lock = vim.json.decode(table.concat(vim.fn.readfile(opts.lockfile), "\n"))
-      assert(lock["aerial.nvim"].commit == expected_commit, "Aerial version and restore lock disagree")
-    end,
-  }
-  dofile(config_dir .. "/lua/lazy_setup.lua")
+local original_version = vim.version
+for _, version in ipairs { "0.10.4", "0.11.6", "0.13.0-dev", "1.0.0" } do
+  local parsed = original_version.parse(version)
+  vim.version = function() return parsed end
+  local ok, message = pcall(dofile, config_dir .. "/init.lua")
+  assert(not ok and message:find("requires Neovim 0.12.x", 1, true), message)
 end
+vim.version = original_version
+
+vim.fn.stdpath = function(kind)
+  assert(kind == "config")
+  return config_dir
+end
+package.loaded.lazy = {
+  setup = function(specs, opts)
+    local aerial
+    for _, spec in ipairs(specs) do
+      if spec[1] == "stevearc/aerial.nvim" then aerial = spec end
+    end
+    assert(aerial and aerial.version == "3.1.0", "Wrong Aerial version for Neovim 0.12")
+    assert(opts.lockfile == config_dir .. "/lazy-lock.json")
+    local lock = vim.json.decode(table.concat(vim.fn.readfile(opts.lockfile), "\n"))
+    assert(lock["aerial.nvim"].commit == "645d108a5242ec7b378cbe643eb6d04d4223f034",
+      "Aerial version and restore lock disagree")
+  end,
+}
+dofile(config_dir .. "/lua/lazy_setup.lua")
 LUA
-	printf 'PASS Aerial version and restore lock selection for Neovim 0.10, 0.11, and 0.12\n'
+	printf 'PASS Neovim 0.12 requirement and Aerial restore lock\n'
 else
 	printf 'SKIP Neovim Lua syntax (nvim not installed)\n'
-	printf 'SKIP AstroLSP cross-version callbacks (nvim not installed)\n'
-	printf 'SKIP Aerial version and restore lock selection (nvim not installed)\n'
+	printf 'SKIP AstroLSP Neovim 0.12 callbacks (nvim not installed)\n'
+	printf 'SKIP AstroCore option values (nvim not installed)\n'
+	printf 'SKIP Neovim 0.12 requirement and Aerial restore lock (nvim not installed)\n'
 fi
 
 if command -v jq >/dev/null 2>&1; then
-	jq -e 'type == "object" and length > 0' .config/nvim/lazy-lock*.json >/dev/null
+	jq -e 'type == "object" and length > 0' .config/nvim/lazy-lock.json >/dev/null
 	printf 'PASS Neovim lock JSON\n'
 elif command -v python3 >/dev/null 2>&1; then
-	for lock_file in .config/nvim/lazy-lock*.json; do
-		python3 -m json.tool "$lock_file" >/dev/null
-	done
+	python3 -m json.tool .config/nvim/lazy-lock.json >/dev/null
 	printf 'PASS Neovim lock JSON\n'
 else
 	printf 'SKIP Neovim lock JSON (jq and python3 not installed)\n'
@@ -795,7 +797,7 @@ printf '%s\n' \
 	': "${CHECK_TRACKED_NVIM_LOCK:?}"' \
 	'if (( $# == 1 )) && [[ $1 == --version ]]; then' \
 	'  printf "VERSION\\n" >>"$CHECK_FAKE_NVIM_LOG"' \
-	'  printf "NVIM v0.10.4\\n"' \
+	'  printf "NVIM v%s\\n" "${CHECK_FAKE_NVIM_VERSION:-0.12.5}"' \
 	'  exit 0' \
 	'fi' \
 	'{' \
@@ -844,7 +846,6 @@ printf '%s\n' \
 	'fi' \
 	'[[ -f $XDG_CONFIG_HOME/nvim/lazy-lock.json ]] || exit 65' \
 	'cmp -s "$CHECK_TRACKED_NVIM_LOCK" "$XDG_CONFIG_HOME/nvim/lazy-lock.json" || exit 66' \
-	'cmp -s "${CHECK_TRACKED_NVIM_LOCK%.json}-nvim-0.10.json" "$XDG_CONFIG_HOME/nvim/lazy-lock-nvim-0.10.json" || exit 66' \
 	'create_complete_tree() {' \
 	'  mkdir -p "$XDG_DATA_HOME/nvim/lazy/lazy.nvim/lua/lazy"' \
 	'  mkdir -p "$XDG_DATA_HOME/nvim/lazy/AstroNvim/lua/astronvim"' \
@@ -884,10 +885,6 @@ printf '%s\n' \
 	'  lock-change)' \
 	'    create_complete_tree' \
 	'    printf "{}\\n" >"$XDG_CONFIG_HOME/nvim/lazy-lock.json"' \
-	'    ;;' \
-	'  legacy-lock-change)' \
-	'    create_complete_tree' \
-	'    printf "{}\\n" >"$XDG_CONFIG_HOME/nvim/lazy-lock-nvim-0.10.json"' \
 	'    ;;' \
 	'  forbidden) exit 99 ;;' \
 	'  *) exit 67 ;;' \
@@ -964,6 +961,23 @@ astro_dry_output=$(run_astronvim_bootstrap Linux "$astro_dry_home" \
 [[ ! -e "$astro_dry_home/.local/share/nvim" ]]
 grep -Fq "INSTALL   $astro_dry_home/.local/share/nvim (AstroNvim)" \
 	<<<"$astro_dry_output"
+
+for astro_unsupported_version in 0.10.4 0.11.6 0.13.0-dev 1.0.0; do
+	astro_version_home="$check_root/astronvim-version-$astro_unsupported_version"
+	astro_version_log="$check_root/astronvim-version-$astro_unsupported_version.nvim.log"
+	mkdir -p "$astro_version_home"
+	: >"$astro_version_log"
+	: >"$astro_git_log"
+	astro_version_output=$(CHECK_FAKE_NVIM_VERSION=$astro_unsupported_version \
+		run_astronvim_bootstrap Linux "$astro_version_home" forbidden \
+		"$astro_version_log" unset unset --apply)
+	grep -Fq 'Neovim 0.12.x is unavailable' <<<"$astro_version_output"
+	grep -Fxq VERSION "$astro_version_log"
+	[[ $(wc -l <"$astro_version_log") == 1 ]]
+	[[ ! -s $astro_git_log && ! -e $astro_version_home/.local/share/nvim ]]
+	cmp .config/nvim/init.lua "$astro_version_home/.config/nvim/init.lua"
+done
+printf 'PASS AstroNvim preinstall requires Neovim 0.12\n'
 
 astro_apply_home="$check_root/astronvim-apply"
 astro_apply_log="$check_root/astronvim-apply.nvim.log"
@@ -1148,7 +1162,7 @@ cmp -s "$astro_empty_backup_snapshot" "$astro_empty_backup_current"
 
 astro_lock_snapshot="$check_root/astronvim-lazy-lock.snapshot"
 cp -p .config/nvim/lazy-lock.json "$astro_lock_snapshot"
-for astro_failure_mode in failure malformed lock-change legacy-lock-change health-no-marker; do
+for astro_failure_mode in failure malformed lock-change health-no-marker; do
 	astro_failure_home="$check_root/astronvim-$astro_failure_mode"
 	astro_failure_log="$check_root/astronvim-$astro_failure_mode.nvim.log"
 	mkdir -p "$astro_failure_home"
@@ -1178,10 +1192,6 @@ for astro_failure_mode in failure malformed lock-change legacy-lock-change healt
 			;;
 		lock-change)
 			grep -Fq 'AstroNvim installation unexpectedly changed lazy-lock.json' \
-				<<<"$astro_failure_output"
-			;;
-		legacy-lock-change)
-			grep -Fq 'AstroNvim installation unexpectedly changed lazy-lock-nvim-0.10.json' \
 				<<<"$astro_failure_output"
 			;;
 		health-no-marker)

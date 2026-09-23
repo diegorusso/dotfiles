@@ -32,11 +32,7 @@ return {
           desc = "Refresh codelens (buffer)",
           callback = function(args)
             if require("astrolsp").config.features.codelens then
-              if vim.lsp.codelens.enable then
-                vim.lsp.codelens.enable(true, { bufnr = args.buf })
-              else
-                vim.lsp.codelens.refresh { bufnr = args.buf }
-              end
+              vim.lsp.codelens.enable(true, { bufnr = args.buf })
             end
           end,
         },
@@ -53,11 +49,7 @@ return {
           function() require("astrolsp.toggles").buffer_semantic_tokens() end,
           desc = "Toggle LSP semantic highlight (buffer)",
           cond = function(client, bufnr)
-            return require("astrolsp.utils").supports_method(
-              client,
-              "textDocument/semanticTokens/full",
-              bufnr
-            ) and vim.lsp.semantic_tokens ~= nil
+            return client:supports_method("textDocument/semanticTokens/full", bufnr)
           end,
         },
       },
