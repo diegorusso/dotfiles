@@ -7,6 +7,8 @@ alias .....='cd ../../../..'
 alias -- -='cd -'
 
 alias g=git
+alias vi=nvim
+alias vim=nvim
 alias week='date +%V'
 alias reload='exec "$BASH" -l'
 alias c=copy

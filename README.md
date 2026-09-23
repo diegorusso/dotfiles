@@ -360,6 +360,8 @@ tmux source-file "$HOME/.tmux.conf"
 
 ## Neovim
 
+In interactive Bash shells, `vi` and `vim` are aliases for `nvim`.
+
 The tracked `.config/nvim` is a complete
 [AstroNvim v5.3.15](https://github.com/AstroNvim/AstroNvim/releases/tag/v5.3.15)
 user configuration for **Neovim 0.12.x** on macOS, Ubuntu, and Raspberry Pi OS.
