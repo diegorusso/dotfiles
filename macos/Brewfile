@@ -1,21 +1,17 @@
+# Additions to the shared ../Brewfile, selected only on macOS by ../brew.sh.
+# Linux uses APT for Bash, completion, curl, Eternal Terminal, Git,
+# Git LFS, htop, Python, tmux, and wget.
 brew "bash"
 brew "bash-completion@2"
 brew "colima"
 brew "curl"
 brew "docker"
 brew "et"
-brew "fzf"
 brew "git"
 brew "git-lfs"
 brew "htop"
-brew "neovim"
 brew "python"
-brew "ripgrep"
-brew "shellcheck"
-brew "starship"
 brew "tmux"
-brew "tree"
-brew "uv"
 brew "wget"
 
 cask "1Password"

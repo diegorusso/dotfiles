@@ -8,14 +8,16 @@ Usage: ./bootstrap.sh [--dry-run | --apply] [-d | --diff]
        ./bootstrap.sh --restore BACKUP [--dry-run | --apply] [-d | --diff]
 
 	--dry-run      Show the exact installation plan (the default).
-	--apply        Back up changed targets and install the tracked files.
+	--apply        Install missing Homebrew and back up/install tracked files.
 	--restore PATH Preview or apply restoration from a managed backup.
 	-d, --diff     Show content and mode differences for changed managed dotfiles.
 	-h, --help     Show this help.
 
-The script never pulls this repository, installs OS packages, changes the login
-shell, or overwrites ~/.config/extra. Apply mode may access GitHub to install a
-missing TPM and the locked AstroNvim plugin set. Restore previews and
+The script never pulls this repository, runs apt, changes the login shell, or
+overwrites ~/.config/extra. Apply mode may run Homebrew's official
+installer (which can request sudo), and access GitHub to install a missing TPM
+and the locked AstroNvim plugin set. Brewfile packages remain a separate step
+using ./brew.sh --apply. Restore previews and
 installation dry runs are offline and read-only; use --apply explicitly to
 change HOME.
 EOF
@@ -153,6 +155,76 @@ acquire_operation_lock() {
 
 find_tpm_path() {
 	sh "$repo_dir/.tmux/load-tpm.sh" --print-path
+}
+
+find_homebrew() {
+	local candidate
+	if candidate=$(type -P brew); then
+		printf '%s\n' "$candidate"
+		return 0
+	fi
+	if [[ -n ${HOMEBREW_PREFIX:-} && -x $HOMEBREW_PREFIX/bin/brew ]]; then
+		printf '%s\n' "$HOMEBREW_PREFIX/bin/brew"
+		return 0
+	fi
+	for candidate in /opt/homebrew/bin/brew /usr/local/bin/brew \
+		/home/linuxbrew/.linuxbrew/bin/brew; do
+		if [[ -x $candidate ]]; then
+			printf '%s\n' "$candidate"
+			return 0
+		fi
+	done
+	return 1
+}
+
+setup_homebrew() {
+	local brew_path brew_environment
+	local installer="$scratch_root/homebrew-install.sh"
+	local installer_url=https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+
+	if brew_path=$(find_homebrew); then
+		printf 'UNCHANGED %s (Homebrew)\n' "$brew_path"
+	else
+		printf 'INSTALL   Homebrew (official installer; standard platform prefix)\n'
+		[[ $mode == apply ]] || return 0
+		if ! command -v curl >/dev/null 2>&1; then
+			printf '%s\n' 'Homebrew installation requires curl; see the prerequisites in README.md.' >&2
+			return 1
+		fi
+		# Download completely before execution and ignore per-user curl settings.
+		if ! curl --disable --fail --show-error --location --proto '=https' \
+			--tlsv1.2 --output "$installer" "$installer_url"; then
+			printf '%s\n' 'Could not download the official Homebrew installer.' >&2
+			return 1
+		fi
+		# Keep the real HOME for ownership and sudo, but isolate Git configuration
+		# so GitHub HTTPS clones do not inherit SSH rewrites or disabled TLS checks.
+		if ! (
+			unset GIT_CONFIG_NOSYSTEM GIT_CONFIG_SYSTEM GIT_CONFIG_PARAMETERS
+			unset GIT_CONFIG_COUNT GIT_SSL_NO_VERIFY
+			GIT_CONFIG_GLOBAL="$bootstrap_git_config" GIT_TERMINAL_PROMPT=0 \
+				/bin/bash "$installer"
+		); then
+			printf '%s\n' 'Homebrew installation failed; check the installer output, prerequisites, and sudo access.' >&2
+			return 1
+		fi
+		if ! brew_path=$(find_homebrew); then
+			printf '%s\n' 'The Homebrew installer finished, but no brew executable was found.' >&2
+			return 1
+		fi
+	fi
+
+	if [[ $mode == apply ]]; then
+		if ! HOMEBREW_NO_AUTO_UPDATE=1 "$brew_path" --version >/dev/null; then
+			printf 'Homebrew is present but unusable: %s\n' "$brew_path" >&2
+			return 1
+		fi
+		if ! brew_environment=$(HOMEBREW_NO_AUTO_UPDATE=1 "$brew_path" shellenv bash); then
+			printf 'Could not load the Homebrew environment: %s\n' "$brew_path" >&2
+			return 1
+		fi
+		eval "$brew_environment"
+	fi
 }
 
 astronvim_is_installed() {
@@ -1430,6 +1502,8 @@ stage_tree "$repo_dir/.config/nvim" "$scratch_root/nvim" 644 \
 cp "$repo_dir/astronvim-health.lua" "$scratch_root/astronvim-health.lua"
 chmod 644 "$scratch_root/astronvim-health.lua"
 
+setup_homebrew
+
 if [[ $mode == apply && $tpm_install_required == true ]]; then
 	if ! command -v git >/dev/null 2>&1; then
 		printf 'TPM installation requires git: %s\n' "$tpm_repository" >&2
@@ -1512,7 +1586,7 @@ install_target "$scratch_root/nvim" \
 if [[ $mode == dry-run ]]; then
 	printf '\nDry run only. Re-run with --apply to install this plan.\n'
 else
-	printf '\nInstallation complete. Start a new Bash login shell to load it.\n'
+	printf '\nInstallation complete. Run exec bash -l to load the dotfiles and activate Homebrew.\n'
 	if [[ ${backup_ready:-false} == true ]]; then
 		printf 'Restore backup: %s\n' "$backup_root"
 		printf 'Restore preview: ./bootstrap.sh --restore "%s"\n' "$backup_root"

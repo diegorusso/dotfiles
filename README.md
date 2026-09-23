@@ -25,9 +25,10 @@ shell/                       shared environment and interactive Bash layers
 .tmux.conf, .tmux/           portable tmux configuration and layouts
 .config/nvim/                complete AstroNvim user configuration
 astronvim-health.lua         bootstrap-only AstroNvim startup validator
-macos/                       macOS Bash, Homebrew, and user-default settings
-linux/                       Linux Bash and Debian-family package settings
-bootstrap.sh                 explicit dotfile installer; no package actions
+Brewfile, brew.sh            shared Homebrew CLI packages and bundle helper
+macos/                       macOS Homebrew additions, Bash settings, and defaults
+linux/                       Linux Bash, system packages, and brew prerequisites
+bootstrap.sh                 Homebrew setup and explicit dotfile installer
 check.sh                     local static and isolated integration validation
 ```
 
@@ -59,11 +60,31 @@ Restore previews and applies accept the same flag. TPM and AstroNvim plugin
 data are summarized rather than dumped as recursive diffs; keeping dry runs
 offline means their upstream content is not fetched just to display a diff.
 
-After reviewing it, install the tracked files:
+After reviewing it, install Homebrew if needed and the tracked files:
 
 ```bash
 ./bootstrap.sh --apply
 ```
+
+Bootstrap reuses Homebrew found on `PATH`, under `HOMEBREW_PREFIX`, or in the
+standard macOS/Linux locations. If it is missing, apply downloads and runs the
+[official Homebrew installer](https://docs.brew.sh/Installation), then loads
+`brew shellenv bash` for subsequent bootstrap steps. The installer can request
+sudo access and install Apple's Command Line Tools on macOS. Run bootstrap as
+your regular user. For unattended installation, use `NONINTERACTIVE=1`; any
+required sudo access must already be available.
+
+Homebrew setup happens before the dotfiles are replaced. A download,
+installation, or activation failure stops bootstrap. Dry runs only report
+whether Homebrew would be installed; they do not download or run it. Brewfile
+packages remain a separate step. After bootstrap, start a new Bash login shell
+to activate Homebrew automatically:
+
+```bash
+exec bash -l
+```
+
+Then run `./brew.sh --apply` to install the packages.
 
 Changed targets are moved to a timestamped directory under
 `~/.local/state/dotfiles/backups/` before replacement. The installer uses an
@@ -71,9 +92,9 @@ explicit manifest and never:
 
 - runs `git pull`;
 - copies files outside the explicit file and managed-tree manifests;
-- installs or upgrades packages;
+- installs Brewfile packages or runs APT;
 - changes the login shell;
-- runs macOS defaults or privileged commands;
+- runs macOS defaults;
 - creates, overwrites, backs up, or restores `~/.config/extra`.
 
 Tracked configuration files are installed with explicit modes rather than
@@ -81,13 +102,16 @@ inheriting the checkout's umask: regular files use `0644`, executable helper
 scripts use `0755`, and managed configuration directories use `0755`. Private
 backup and state directories remain `0700`.
 
-Every applied change is recorded in a versioned manifest in the backup printed
+Every applied dotfile change is recorded in a versioned manifest in the backup printed
 by bootstrap. Preview a restoration first, then apply it explicitly:
 
 ```bash
 ./bootstrap.sh --restore "$HOME/.local/state/dotfiles/backups/TIMESTAMP"
 ./bootstrap.sh --restore "$HOME/.local/state/dotfiles/backups/TIMESTAMP" --apply
 ```
+
+Homebrew and its installer-created files are outside this restore manifest.
+Restore neither installs nor removes Homebrew, and does not require it to work.
 
 Restore validates the complete manifest before changing anything and processes
 its actions in reverse. The selected backup is never consumed. The current
@@ -192,30 +216,93 @@ machine's SSH keys or forwarded agent:
 
 ## Packages
 
-Dotfile installation and package provisioning are separate operations.
+Homebrew manages shared CLI tools on macOS, Ubuntu, and Raspberry Pi OS. The
+root `Brewfile` contains Neovim, Starship, and the other shared tools.
+Linux uses APT for Bash, bash-completion, curl, Eternal Terminal (`et`), Git,
+Git LFS, htop, Python, tmux, and wget; these are listed in `linux/packages.txt`.
+`macos/Brewfile` supplies their Homebrew equivalents on macOS, along with
+GUI/font casks and Colima/Docker. Linux uses only the root Brewfile.
 
-On macOS, preview or apply the shared Homebrew profile, including Colima and
-Docker, with:
+On Linux, Eternal Terminal's server and systemd unit stay together in the
+system package. The packaged unit starts `/usr/bin/etserver` directly and does
+not depend on the Homebrew activation in your Bash dotfiles.
 
-```bash
-./macos/brew.sh
-./macos/brew.sh --apply
-```
+`./bootstrap.sh --apply` installs Homebrew when it is missing, using the
+official installer's standard prefix (`/home/linuxbrew/.linuxbrew` on Linux).
+The shared `shell/env.bash` discovers this location as well as the macOS
+prefixes and runs `brew shellenv bash` automatically for Bash login and
+interactive shells. After installation, run `exec bash -l` in an existing
+terminal to load it; future terminals load it on startup. Use a 64-bit OS on
+the Raspberry Pi for ARM64 binary packages.
 
-`macos/brew.sh` does not install Homebrew, run `brew update`/`brew upgrade`, or
-change the login shell. Homebrew may still upgrade a dependency when that is
-required to install a selected formula.
+Before the first bootstrap on Debian, Ubuntu, or Raspberry Pi OS, ensure that
+Homebrew's prerequisites are installed. `linux/packages.txt` contains these and
+Linux system tools. Review it against the host's configured repositories before
+installing. For `et`, follow the
+[upstream package instructions](https://github.com/MisterTea/EternalTerminal#installation):
+Ubuntu uses the project's PPA, while Debian has a separate upstream repository.
+Check `apt-cache policy et` for a candidate matching the host's release and
+architecture. If no suitable package is published, including for Raspberry Pi
+OS on Trixie, use upstream's
+[Debian/Ubuntu package build instructions](https://github.com/MisterTea/EternalTerminal#debianubuntu)
+to install a local `.deb` first. Bootstrap does not configure APT repositories.
 
-On Debian, Ubuntu, and Raspberry Pi OS, review `linux/packages.txt` against the
-host's configured repositories before explicitly installing it:
+Once the package sources are ready:
 
 ```bash
 grep -Ev '^[[:space:]]*(#|$)' linux/packages.txt |
   xargs sudo apt install
 ```
 
-Starship and Eternal Terminal are omitted from that list because they are not
-consistently available from the configured Debian-family repositories.
+System curl and Git are needed to install Homebrew. Keeping them, Bash, and
+Python under APT avoids requesting a second copy in the Linux Brewfile.
+Homebrew can still install its own versions as dependencies of other formulas;
+it generally uses its own libraries on Linux. See
+[Homebrew on Linux](https://docs.brew.sh/Homebrew-on-Linux). Changing the
+manifests does not remove packages already installed by either package manager.
+
+Once Homebrew is available, use the same commands on every machine:
+
+```bash
+./brew.sh
+./brew.sh --apply
+```
+
+The default dry run checks installed dependencies and reports missing ones,
+returning a nonzero status when a bundle is incomplete. Apply installs the
+shared bundle first and, on macOS, the macOS additions. The old
+`./macos/brew.sh` command delegates to this helper.
+
+On Debian-family Linux, both modes report existing commands outside Homebrew,
+including system copies later in `PATH`. The check resolves symlinks and asks
+`dpkg-query` which installed package owns each executable; it does not assume
+that formula, command, and APT package names match. For optional duplicates it
+prints `sudo apt-get --simulate remove -- ...`, followed by the corresponding
+removal command to use only after testing the Homebrew replacements and
+reviewing APT's complete removal list. Neither command is run automatically.
+
+Essential/protected packages, the system shell and Python, Eternal Terminal's
+remote-access package, and packages retained in `linux/packages.txt` are
+reported with a reason to keep them. Commands with unknown or ambiguous dpkg
+ownership receive no APT removal suggestion. macOS skips this APT-specific check.
+
+Homebrew installation is part of bootstrap; Brewfile package provisioning
+remains separate. `brew.sh` requires Homebrew on `PATH` and uses
+`HOMEBREW_NO_AUTO_UPDATE=1` and `--no-upgrade`. Homebrew may still upgrade a
+dependency when required to install a selected formula. The helper does not
+start services or change the login shell.
+
+A Brewfile selects packages, not exact versions. This configuration requires
+Neovim **0.12.x** on every machine. Check `command -v nvim` and `nvim --version`
+after installing the Homebrew formula. Once Homebrew's Neovim is on 0.12.x,
+use `brew pin neovim` to prevent routine upgrades from changing the version.
+The pin applies to the installed version on that machine; it does not select
+0.12 for a fresh installation. Before an intentional upgrade, check
+`brew info neovim` and keep the selected release within 0.12.x. Existing APT
+installations can remain while the shell selects Homebrew's binaries. See
+[Homebrew's pin command](https://docs.brew.sh/Manpage#pin---formula---cask-installed_formulainstalled_cask-)
+and
+[Homebrew Bundle's version policy](https://docs.brew.sh/Brew-Bundle-and-Brewfile#versions).
 
 ## Ghostty
 
@@ -332,7 +419,9 @@ Run the local checks before installing or committing:
 ```
 
 This checks Bash syntax, Git configuration parsing, package manifest shape,
-Neovim Lua and lock-file syntax, Starship configuration parsing, isolated Linux
+Homebrew installation/reuse and bundle selection on Linux and macOS, Linux command
+ownership and APT removal suggestions, Neovim Lua and lock-file syntax, Starship
+configuration parsing, isolated Linux
 and macOS bootstrap installation/idempotence, reversible restore and validation
 guards, `~/.config/extra` preservation and startup behavior, permission repair,
 simulated macOS-defaults backup behavior, whitespace, and ShellCheck when it is

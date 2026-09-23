@@ -1,22 +1,23 @@
-# Shared CLI dependencies available from Debian/Raspberry Pi OS repositories.
+# Linux system tools and Homebrew prerequisites for Debian-family hosts.
+# APT manages these system tools instead of the shared Brewfile.
+# et needs an upstream package source or a locally built .deb; see README.md.
+bash
 bash-completion
+bind9-dnsutils
 build-essential
+ca-certificates
 curl
-dnsutils
+et
 file
-fzf
 gdb
 git
 git-lfs
 htop
 iproute2
 less
-neovim
 openssl
+procps
 python3
-ripgrep
-shellcheck
 tmux
-tree
 unzip
 wget

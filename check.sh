@@ -9,6 +9,8 @@ bash_files=(
 	.bash_profile
 	.bashrc
 	bootstrap.sh
+	brew.sh
+	linux/brew-check.sh
 	linux/interactive.bash
 	macos/brew.sh
 	macos/defaults.sh
@@ -45,10 +47,11 @@ printf 'PASS Git config parsing\n'
 
 awk '
 	/^[[:space:]]*(#|$)/ { next }
-	/^(brew|cask) "[A-Za-z0-9@+._-]+"$/ { next }
+	/^brew "[A-Za-z0-9@+._-]+"$/ { next }
+	FILENAME == "macos/Brewfile" && /^cask "[A-Za-z0-9@+._-]+"$/ { next }
 	{ printf "%s:%d: unsupported Brewfile entry: %s\n", FILENAME, FNR, $0 > "/dev/stderr"; failed = 1 }
 	END { exit failed }
-' macos/Brewfile
+' Brewfile macos/Brewfile
 awk '
 	/^[[:space:]]*(#|$)/ { next }
 	/^[a-z0-9][a-z0-9+.-]*$/ { next }
@@ -194,9 +197,242 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Ordinary bootstrap checks must never depend on network access or a host TPM
-# installation. TPM-specific checks below use their own scoped fake sh/git
-# commands to exercise the installation path deterministically.
+# Exercise the package helper without contacting Homebrew or installing tools.
+# A path with spaces also checks argument quoting and invocation outside the repo.
+brew_fixture="$check_root/brew repo"
+brew_fake_bin="$check_root/brew-bin"
+brew_log="$check_root/brew.log"
+brew_expected="$check_root/brew.expected"
+mkdir -p "$brew_fixture/macos" "$brew_fixture/linux" "$brew_fake_bin"
+cp Brewfile brew.sh "$brew_fixture/"
+cp macos/Brewfile macos/brew.sh "$brew_fixture/macos/"
+cp linux/brew-check.sh linux/packages.txt "$brew_fixture/linux/"
+ln -s "$(command -v bash)" "$brew_fake_bin/bash"
+ln -s "$(command -v cat)" "$brew_fake_bin/cat"
+cat >"$brew_fake_bin/uname" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$DOTFILES_BREW_TEST_KERNEL"
+SH
+cat >"$brew_fake_bin/brew" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ ${HOMEBREW_NO_AUTO_UPDATE:-} == 1 ]]
+if [[ $# == 1 && $1 == --prefix ]]; then
+	printf '%s\n' "$DOTFILES_BREW_TEST_PREFIX"
+	exit 0
+fi
+[[ $1 == bundle && $3 == --no-upgrade ]]
+case $2 in
+	check)
+		[[ $# == 5 && $4 == --verbose && $5 == --file=* ]]
+		bundle=${5#--file=}
+		;;
+	install)
+		[[ $# == 4 && $4 == --file=* ]]
+		bundle=${4#--file=}
+		;;
+	*) exit 97 ;;
+esac
+[[ -f $bundle ]]
+printf '%s\t%s\n' "$2" "$bundle" >>"$DOTFILES_BREW_TEST_LOG"
+[[ $bundle != "${DOTFILES_BREW_TEST_FAIL_BUNDLE:-}" ]] || exit 3
+SH
+chmod 755 "$brew_fake_bin/uname" "$brew_fake_bin/brew"
+
+run_brew_bundle() (
+	local kernel=$1 entrypoint=$2 failed_bundle=$3
+	shift 3
+	cd "$check_root"
+	PATH=$brew_fake_bin DOTFILES_BREW_TEST_KERNEL=$kernel \
+		DOTFILES_BREW_TEST_LOG=$brew_log \
+		DOTFILES_BREW_TEST_FAIL_BUNDLE=$failed_bundle \
+		"$brew_fixture/$entrypoint" "$@"
+)
+
+for brew_kernel in Linux Darwin; do
+	for brew_action in check install; do
+		: >"$brew_log"
+		if [[ $brew_action == check ]]; then
+			run_brew_bundle "$brew_kernel" brew.sh '' >/dev/null
+		else
+			run_brew_bundle "$brew_kernel" brew.sh '' --apply >/dev/null
+		fi
+		printf '%s\t%s\n' "$brew_action" "$brew_fixture/Brewfile" >"$brew_expected"
+		if [[ $brew_kernel == Darwin ]]; then
+			printf '%s\t%s\n' "$brew_action" "$brew_fixture/macos/Brewfile" >>"$brew_expected"
+		fi
+		cmp "$brew_expected" "$brew_log"
+	done
+done
+
+: >"$brew_log"
+brew_failure_status=0
+run_brew_bundle Darwin brew.sh "$brew_fixture/Brewfile" --dry-run \
+	>/dev/null || brew_failure_status=$?
+[[ $brew_failure_status == 1 ]]
+printf 'check\t%s\n' "$brew_fixture/Brewfile" "$brew_fixture/macos/Brewfile" >"$brew_expected"
+cmp "$brew_expected" "$brew_log"
+
+: >"$brew_log"
+brew_failure_status=0
+run_brew_bundle Darwin brew.sh "$brew_fixture/Brewfile" --apply \
+	>/dev/null || brew_failure_status=$?
+[[ $brew_failure_status == 3 ]]
+printf 'install\t%s\n' "$brew_fixture/Brewfile" >"$brew_expected"
+cmp "$brew_expected" "$brew_log"
+
+: >"$brew_log"
+brew_failure_status=0
+run_brew_bundle Darwin brew.sh "$brew_fixture/macos/Brewfile" --apply \
+	>/dev/null || brew_failure_status=$?
+[[ $brew_failure_status == 3 ]]
+printf 'install\t%s\n' "$brew_fixture/Brewfile" "$brew_fixture/macos/Brewfile" >"$brew_expected"
+cmp "$brew_expected" "$brew_log"
+
+: >"$brew_log"
+run_brew_bundle Darwin macos/brew.sh '' --dry-run >/dev/null
+printf 'check\t%s\n' "$brew_fixture/Brewfile" "$brew_fixture/macos/Brewfile" >"$brew_expected"
+cmp "$brew_expected" "$brew_log"
+
+: >"$brew_log"
+if run_brew_bundle Plan9 brew.sh '' --apply >/dev/null 2>&1; then
+	printf 'Homebrew helper accepted an unsupported platform\n' >&2
+	exit 1
+fi
+if run_brew_bundle Linux brew.sh '' --unknown >/dev/null 2>&1; then
+	printf 'Homebrew helper accepted an unknown argument\n' >&2
+	exit 1
+fi
+[[ ! -s $brew_log ]]
+mv "$brew_fake_bin/brew" "$brew_fake_bin/disabled-brew"
+if brew_missing_output=$(run_brew_bundle Linux brew.sh '' --apply 2>&1); then
+	printf 'Homebrew helper accepted a missing brew executable\n' >&2
+	exit 1
+fi
+grep -Fq 'Homebrew is not on PATH' <<<"$brew_missing_output"
+[[ ! -s $brew_log ]]
+printf 'PASS Homebrew Linux/macOS bundles, dry runs, compatibility entrypoint, and failure guards\n'
+
+if [[ $(uname -s) == Linux ]]; then
+	# Model a Homebrew-first PATH with system copies, aliases, and manual installs.
+	# Include system formulas only in this fixture to retain keep-rule coverage;
+	# the real Linux Brewfile delegates these tools to APT.
+	printf '%s\n' 'brew "bash"' 'brew "curl"' 'brew "et"' 'brew "git"' \
+		'brew "htop"' 'brew "python"' 'brew "tmux"' 'brew "wget"' \
+		>>"$brew_fixture/Brewfile"
+	brew_test_prefix="$check_root/homebrew"
+	brew_system_bin="$check_root/system-bin"
+	brew_alias_bin="$check_root/alias-bin"
+	brew_owner_log="$check_root/dpkg.log"
+	brew_remove_log="$check_root/apt.log"
+	mkdir -p "$brew_test_prefix/bin" "$brew_system_bin" "$brew_alias_bin"
+	mv "$brew_fake_bin/disabled-brew" "$brew_fake_bin/brew"
+	for brew_tool in awk grep readlink; do
+		ln -s "$(command -v "$brew_tool")" "$brew_fake_bin/$brew_tool"
+	done
+	for brew_binary in nvim rg python3 curl git et htop tmux wget uv; do
+		printf '%s\n' '#!/bin/sh' 'exit 97' >"$brew_system_bin/$brew_binary"
+		chmod 755 "$brew_system_bin/$brew_binary"
+	done
+	cp "$brew_system_bin/nvim" "$brew_test_prefix/bin/nvim"
+	cp "$brew_system_bin/nvim" "$brew_test_prefix/bin/starship"
+	ln -s "$brew_system_bin/nvim" "$brew_alias_bin/nvim"
+	ln -s "$brew_test_prefix/bin/starship" "$brew_alias_bin/starship"
+	cat >"$brew_fake_bin/dpkg-query" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"$DOTFILES_BREW_TEST_OWNER_LOG"
+lookup=${!#}
+case $1 in
+	-S)
+		case ${lookup##*/} in
+			nvim) owner=neovim ;;
+			rg) owner=ripgrep:arm64 ;;
+			python3) owner=python3-minimal ;;
+			uv) exit 1 ;; # Manual installation.
+			wget) owner='wget, another-package' ;; # Ambiguous ownership.
+			*) owner=${lookup##*/} ;;
+		esac
+		printf '%s: %s\n' "$owner" "$lookup"
+		;;
+	-W)
+		case $lookup in
+			bash) printf 'installed|yes|\n' ;;
+			htop) printf 'installed||yes\n' ;;
+			tmux) exit 1 ;; # Missing metadata must not produce a removal suggestion.
+			*) printf 'installed||\n' ;;
+		esac
+		;;
+	*) exit 97 ;;
+esac
+SH
+	cat >"$brew_fake_bin/apt-get" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$DOTFILES_BREW_TEST_REMOVE_LOG"
+exit 97
+SH
+	chmod 755 "$brew_fake_bin/dpkg-query" "$brew_fake_bin/apt-get"
+
+	run_brew_duplicate_check() (
+		local kernel=$1
+		shift
+		cd "$check_root"
+		PATH="$brew_test_prefix/bin:$brew_system_bin:$brew_alias_bin:$brew_fake_bin" \
+			DOTFILES_BREW_TEST_KERNEL=$kernel DOTFILES_BREW_TEST_LOG=$brew_log \
+			DOTFILES_BREW_TEST_PREFIX=$brew_test_prefix \
+			DOTFILES_BREW_TEST_OWNER_LOG=$brew_owner_log \
+			DOTFILES_BREW_TEST_REMOVE_LOG=$brew_remove_log \
+			"$brew_fixture/brew.sh" "$@"
+	)
+	for brew_mode in --dry-run --apply; do
+		: >"$brew_log"
+		: >"$brew_owner_log"
+		brew_duplicate_output=$(run_brew_duplicate_check Linux "$brew_mode")
+		grep -Fxq "  nvim: $brew_system_bin/nvim (APT package: neovim)" <<<"$brew_duplicate_output"
+		[[ $(grep -c '^  nvim:' <<<"$brew_duplicate_output") == 1 ]]
+		if grep -Fq "$brew_test_prefix/" <<<"$brew_duplicate_output"; then
+			printf 'Homebrew installations were reported as system duplicates\n' >&2
+			exit 1
+		fi
+		grep -Fq 'uv (no unambiguous dpkg owner;' <<<"$brew_duplicate_output"
+		grep -Fq 'wget (no unambiguous dpkg owner;' <<<"$brew_duplicate_output"
+		grep -Fq 'Keep: essential or protected system package.' <<<"$brew_duplicate_output"
+		grep -Fq 'Keep: system shell or Python runtime.' <<<"$brew_duplicate_output"
+		grep -Fq 'Keep: Eternal Terminal also provides the remote-access server.' <<<"$brew_duplicate_output"
+		grep -Fq 'Keep: listed in linux/packages.txt' <<<"$brew_duplicate_output"
+		grep -Fq 'Keep: unable to verify package status.' <<<"$brew_duplicate_output"
+		printf '%s\n' \
+			'  sudo apt-get --simulate remove -- neovim ripgrep:arm64' \
+			'  sudo apt-get remove -- neovim ripgrep:arm64' >"$brew_expected"
+		grep '^  sudo apt-get ' <<<"$brew_duplicate_output" >"$check_root/removal-commands"
+		cmp "$brew_expected" "$check_root/removal-commands"
+		[[ -s $brew_owner_log && -s $brew_log && ! -e $brew_remove_log ]]
+	done
+	: >"$brew_owner_log"
+	run_brew_duplicate_check Darwin --dry-run >/dev/null
+	[[ ! -s $brew_owner_log && ! -e $brew_remove_log ]]
+	printf 'PASS existing Linux commands, APT ownership, keep rules, and advisory-only removals\n'
+else
+	printf 'SKIP Linux package ownership checks (requires Linux)\n'
+fi
+
+# Ordinary bootstrap checks must never install Homebrew or depend on network
+# access. Installation-specific checks below use isolated command fixtures.
+offline_brew_bin="$check_root/offline-brew-bin"
+mkdir -p "$offline_brew_bin"
+cat >"$offline_brew_bin/brew" <<'SH'
+#!/usr/bin/env bash
+case "$*" in
+	--version) printf 'Homebrew offline fixture\n' ;;
+	'shellenv bash') printf ':\n' ;;
+	*) exit 97 ;;
+esac
+SH
+chmod 755 "$offline_brew_bin/brew"
+PATH="$offline_brew_bin:$PATH"
+export PATH
+
+# TPM-specific checks use their own scoped fake sh/git commands.
 offline_tpm="$check_root/offline-tpm"
 printf '%s\n' '#!/bin/sh' 'exit 0' >"$offline_tpm"
 chmod 755 "$offline_tpm"
@@ -282,6 +518,154 @@ run_bootstrap() (
 	HOME=$check_home TMUX_TPM_PATH=$offline_tpm \
 		XDG_DATA_HOME=$offline_astronvim_data ./bootstrap.sh "$@"
 )
+
+# Replace only default discovery paths in a temporary repository, so these
+# checks cannot discover or alter the host's actual Homebrew installation.
+homebrew_repo="$check_root/homebrew repository"
+homebrew_fake_bin="$check_root/homebrew-install-bin"
+homebrew_installer="$check_root/homebrew-installer"
+homebrew_template="$check_root/homebrew-executable"
+cp -R "$repo_dir" "$homebrew_repo"
+mkdir -p "$homebrew_fake_bin"
+cat >"$homebrew_fake_bin/curl" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ $# == 10 && $1 == --disable && $2 == --fail && $3 == --show-error &&
+	$4 == --location && $5 == --proto && $6 == '=https' && $7 == --tlsv1.2 &&
+	$8 == --output && ${10} == https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh ]]
+printf 'DOWNLOAD\n' >>"$CHECK_HOMEBREW_LOG"
+cp "$CHECK_HOMEBREW_INSTALLER" "$9"
+[[ $CHECK_HOMEBREW_MODE != download-failure ]] || exit 22
+SH
+cat >"$homebrew_installer" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'INSTALLER\n' >>"$CHECK_HOMEBREW_LOG"
+[[ $HOME == "$CHECK_HOMEBREW_HOME" && ${NONINTERACTIVE:-} == 1 ]]
+[[ -z ${GIT_SSL_NO_VERIFY:-} && -z ${GIT_CONFIG_COUNT:-} &&
+	-z ${GIT_CONFIG_PARAMETERS:-} && -z ${GIT_CONFIG_SYSTEM:-} &&
+	-z ${GIT_CONFIG_NOSYSTEM:-} && ${GIT_TERMINAL_PROMPT:-} == 0 ]]
+grep -Fq 'sslVerify = true' "$GIT_CONFIG_GLOBAL"
+case $CHECK_HOMEBREW_MODE in
+	installer-failure) exit 42 ;;
+	missing-brew) exit 0 ;;
+esac
+mkdir -p "$CHECK_HOMEBREW_PREFIX/bin"
+cp "$CHECK_HOMEBREW_TEMPLATE" "$CHECK_HOMEBREW_PREFIX/bin/brew"
+chmod 755 "$CHECK_HOMEBREW_PREFIX/bin/brew"
+SH
+cat >"$homebrew_template" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ ${HOMEBREW_NO_AUTO_UPDATE:-} == 1 ]]
+printf 'BREW %s\n' "$*" >>"$CHECK_HOMEBREW_LOG"
+case "$*" in
+	--version)
+		[[ $CHECK_HOMEBREW_MODE != version-failure ]] || exit 1
+		printf 'Homebrew fixture\n'
+		;;
+	'shellenv bash')
+		[[ $CHECK_HOMEBREW_MODE != shellenv-failure ]] || exit 1
+		printf 'export HOMEBREW_PREFIX=%q\n' "$CHECK_HOMEBREW_PREFIX"
+		printf 'export PATH=%q/bin:$PATH\n' "$CHECK_HOMEBREW_PREFIX"
+		;;
+	*) exit 97 ;;
+esac
+SH
+chmod 755 "$homebrew_fake_bin/curl" "$homebrew_template"
+
+run_homebrew_bootstrap() (
+	local kernel=$1 case_root=$2 prefix_kind=$3 install_mode=$4 source
+	shift 4
+	source=$(<"$repo_dir/bootstrap.sh")
+	source=${source//\/opt\/homebrew\/bin\/brew/"$case_root/apple/bin/brew"}
+	source=${source//\/usr\/local\/bin\/brew/"$case_root/intel/bin/brew"}
+	source=${source//\/home\/linuxbrew\/.linuxbrew\/bin\/brew/"$case_root/linux/bin/brew"}
+	printf '%s\n' "$source" >"$homebrew_repo/bootstrap.sh"
+	CHECK_HOMEBREW_HOME="$case_root/home"
+	CHECK_HOMEBREW_PREFIX="$case_root/$prefix_kind"
+	CHECK_HOMEBREW_MODE=$install_mode
+	CHECK_HOMEBREW_LOG="$case_root/actions.log"
+	CHECK_HOMEBREW_INSTALLER=$homebrew_installer
+	CHECK_HOMEBREW_TEMPLATE=$homebrew_template
+	DOTFILES_CHECK_KERNEL=$kernel
+	export CHECK_HOMEBREW_HOME CHECK_HOMEBREW_PREFIX CHECK_HOMEBREW_MODE
+	export CHECK_HOMEBREW_LOG CHECK_HOMEBREW_INSTALLER CHECK_HOMEBREW_TEMPLATE
+	export DOTFILES_CHECK_KERNEL
+	uname() { printf '%s\n' "$DOTFILES_CHECK_KERNEL"; }
+	type() {
+		# The default-path test deliberately hides brew from PATH discovery.
+		if [[ $* == '-P brew' ]]; then return 1; fi
+		builtin type "$@"
+	}
+	export -f uname type
+	unset HOMEBREW_PREFIX
+	PATH="$homebrew_fake_bin:$PATH"
+	GIT_CONFIG_GLOBAL="$case_root/poison.gitconfig"
+	GIT_CONFIG_SYSTEM="$case_root/poison-system.gitconfig"
+	GIT_CONFIG_PARAMETERS=poison GIT_CONFIG_COUNT=1
+	GIT_SSL_NO_VERIFY=1 GIT_CONFIG_NOSYSTEM=1
+	export PATH GIT_CONFIG_GLOBAL GIT_CONFIG_SYSTEM GIT_CONFIG_PARAMETERS
+	export GIT_CONFIG_COUNT GIT_SSL_NO_VERIFY GIT_CONFIG_NOSYSTEM
+	HOME=$CHECK_HOMEBREW_HOME NONINTERACTIVE=1 TMUX_TPM_PATH=$offline_tpm \
+		XDG_DATA_HOME=$offline_astronvim_data "$homebrew_repo/bootstrap.sh" "$@"
+)
+
+for homebrew_kind in linux apple intel; do
+	homebrew_case="$check_root/homebrew-$homebrew_kind"
+	homebrew_kernel=Darwin
+	[[ $homebrew_kind != linux ]] || homebrew_kernel=Linux
+	mkdir -p "$homebrew_case/home"
+	: >"$homebrew_case/actions.log"
+	homebrew_preview=$(run_homebrew_bootstrap "$homebrew_kernel" \
+		"$homebrew_case" "$homebrew_kind" success --dry-run)
+	grep -Fq 'INSTALL   Homebrew (official installer;' <<<"$homebrew_preview"
+	[[ ! -s $homebrew_case/actions.log && ! -e $homebrew_case/$homebrew_kind ]]
+	! directory_has_entries_except "$homebrew_case/home"
+	homebrew_applied=$(run_homebrew_bootstrap "$homebrew_kernel" \
+		"$homebrew_case" "$homebrew_kind" success --apply)
+	printf '%s\n' DOWNLOAD INSTALLER 'BREW --version' 'BREW shellenv bash' \
+		>"$check_root/homebrew.expected"
+	cmp "$check_root/homebrew.expected" "$homebrew_case/actions.log"
+	[[ -f $homebrew_case/home/.bashrc ]]
+
+	: >"$homebrew_case/actions.log"
+	run_homebrew_bootstrap "$homebrew_kernel" "$homebrew_case" \
+		"$homebrew_kind" success --dry-run >/dev/null
+	[[ ! -s $homebrew_case/actions.log ]]
+	homebrew_repeated=$(run_homebrew_bootstrap "$homebrew_kernel" \
+		"$homebrew_case" "$homebrew_kind" success --apply)
+	printf '%s\n' 'BREW --version' 'BREW shellenv bash' >"$check_root/homebrew.expected"
+	cmp "$check_root/homebrew.expected" "$homebrew_case/actions.log"
+	if grep -Eq '^(INSTALL|REPLACE)' <<<"$homebrew_repeated"; then
+		printf 'Bootstrap reinstalled existing Homebrew or dotfiles\n' >&2
+		exit 1
+	fi
+
+	homebrew_backup=$(sed -n 's/^Restore backup: //p' <<<"$homebrew_applied")
+	# Restore must not require Homebrew or install it if it is missing.
+	mv "$homebrew_case/$homebrew_kind/bin/brew" "$homebrew_case/disabled-brew"
+	: >"$homebrew_case/actions.log"
+	run_homebrew_bootstrap Plan9 "$homebrew_case" "$homebrew_kind" success \
+		--restore "$homebrew_backup" --apply >/dev/null
+	[[ ! -s $homebrew_case/actions.log && ! -e $homebrew_case/home/.bashrc ]]
+done
+
+for homebrew_failure in download-failure installer-failure missing-brew version-failure shellenv-failure; do
+	homebrew_case="$check_root/homebrew-$homebrew_failure"
+	mkdir -p "$homebrew_case/home"
+	: >"$homebrew_case/actions.log"
+	if run_homebrew_bootstrap Linux "$homebrew_case" linux "$homebrew_failure" \
+		--apply >"$homebrew_case/output" 2>&1; then
+		printf 'Bootstrap accepted Homebrew %s\n' "$homebrew_failure" >&2
+		exit 1
+	fi
+	! directory_has_entries_except "$homebrew_case/home"
+	if [[ $homebrew_failure == download-failure ]]; then
+		! grep -Fxq INSTALLER "$homebrew_case/actions.log"
+	fi
+done
+printf 'PASS Homebrew bootstrap, existing prefixes, offline plans/restores, and failure guards\n'
 
 check_bootstrap_platform() {
 	local kernel=$1 platform=$2
