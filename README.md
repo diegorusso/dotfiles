@@ -274,8 +274,19 @@ Once Homebrew is available, use the same commands on every machine:
 
 The default dry run checks installed dependencies and reports missing ones,
 returning a nonzero status when a bundle is incomplete. Apply installs the
-shared bundle first and, on macOS, the macOS additions. The old
-`./macos/brew.sh` command delegates to this helper.
+shared bundle first and, on macOS, the core `macos/Brewfile`. With no profile
+option, only those core packages are checked or installed. Add the appropriate
+application bundle explicitly:
+
+```bash
+./brew.sh --work --apply
+./brew.sh --personal --apply
+```
+
+The work profile adds only 1Password, Discord, Fastmail, Hack Nerd Font,
+Ghostty, Rectangle, WhatsApp, and The Unarchiver. The personal profile adds the
+full personal GUI/font application list. `--work` and `--personal` are mutually
+exclusive. The old `./macos/brew.sh` command delegates to this helper.
 
 On Debian-family Linux, both modes report existing commands outside Homebrew,
 including system copies later in `PATH`. The check resolves symlinks and asks
@@ -291,10 +302,14 @@ reported with a reason to keep them. Commands with unknown or ambiguous dpkg
 ownership receive no APT removal suggestion. macOS skips this APT-specific check.
 
 Homebrew installation is part of bootstrap; Brewfile package provisioning
-remains separate. `brew.sh` requires Homebrew on `PATH` and uses
-`HOMEBREW_NO_AUTO_UPDATE=1` and `--no-upgrade`. Homebrew may still upgrade a
-dependency when required to install a selected formula. The helper does not
-start services or change the login shell.
+remains separate. `brew.sh` requires Homebrew on `PATH`. Both modes first run
+Homebrew's lightweight automatic update so that a newly installed macOS release
+is recognised, then use `HOMEBREW_NO_AUTO_UPDATE=1` and `--no-upgrade` while
+checking or installing the bundles. Dry runs can therefore update Homebrew's
+own code and metadata and may perform Homebrew migrations required by a new
+macOS version, but do not install missing Brewfile packages. Homebrew may still
+upgrade a dependency during apply mode when required to install a selected
+formula. The helper does not start services or change the login shell.
 
 A Brewfile selects packages, not exact versions. This configuration requires
 Neovim **0.12.x** on every machine. Check `command -v nvim` and `nvim --version`

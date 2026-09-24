@@ -49,10 +49,10 @@ printf 'PASS Git config parsing\n'
 awk '
 	/^[[:space:]]*(#|$)/ { next }
 	/^brew "[A-Za-z0-9@+._-]+"$/ { next }
-	FILENAME == "macos/Brewfile" && /^cask "[A-Za-z0-9@+._-]+"$/ { next }
+	FILENAME ~ /^macos\/Brewfile/ && /^cask "[A-Za-z0-9@+._-]+"$/ { next }
 	{ printf "%s:%d: unsupported Brewfile entry: %s\n", FILENAME, FNR, $0 > "/dev/stderr"; failed = 1 }
 	END { exit failed }
-' Brewfile macos/Brewfile
+' Brewfile macos/Brewfile macos/Brewfile.personal macos/Brewfile.work
 awk '
 	/^[[:space:]]*(#|$)/ { next }
 	/^[a-z0-9][a-z0-9+.-]*$/ { next }
@@ -197,7 +197,8 @@ brew_log="$check_root/brew.log"
 brew_expected="$check_root/brew.expected"
 mkdir -p "$brew_fixture/macos" "$brew_fixture/linux" "$brew_fake_bin"
 cp Brewfile brew.sh "$brew_fixture/"
-cp macos/Brewfile macos/brew.sh "$brew_fixture/macos/"
+cp macos/Brewfile macos/Brewfile.personal macos/Brewfile.work \
+	macos/brew.sh "$brew_fixture/macos/"
 cp linux/brew-check.sh linux/packages.txt "$brew_fixture/linux/"
 ln -s "$(command -v bash)" "$brew_fake_bin/bash"
 ln -s "$(command -v cat)" "$brew_fake_bin/cat"
@@ -208,6 +209,9 @@ SH
 cat >"$brew_fake_bin/brew" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ $# == 2 && $1 == update && $2 == --auto-update ]]; then
+	exit 0
+fi
 [[ ${HOMEBREW_NO_AUTO_UPDATE:-} == 1 ]]
 if [[ $# == 1 && $1 == --prefix ]]; then
 	printf '%s\n' "$DOTFILES_BREW_TEST_PREFIX"
@@ -262,7 +266,8 @@ brew_failure_status=0
 run_brew_bundle Darwin brew.sh "$brew_fixture/Brewfile" --dry-run \
 	>/dev/null || brew_failure_status=$?
 [[ $brew_failure_status == 1 ]]
-printf 'check\t%s\n' "$brew_fixture/Brewfile" "$brew_fixture/macos/Brewfile" >"$brew_expected"
+printf 'check\t%s\n' "$brew_fixture/Brewfile" \
+	"$brew_fixture/macos/Brewfile" >"$brew_expected"
 cmp "$brew_expected" "$brew_log"
 
 : >"$brew_log"
@@ -282,8 +287,21 @@ printf 'install\t%s\n' "$brew_fixture/Brewfile" "$brew_fixture/macos/Brewfile" >
 cmp "$brew_expected" "$brew_log"
 
 : >"$brew_log"
+run_brew_bundle Darwin brew.sh '' --work --apply >/dev/null
+printf 'install\t%s\n' "$brew_fixture/Brewfile" "$brew_fixture/macos/Brewfile" \
+	"$brew_fixture/macos/Brewfile.work" >"$brew_expected"
+cmp "$brew_expected" "$brew_log"
+
+: >"$brew_log"
+run_brew_bundle Darwin brew.sh '' --personal --apply >/dev/null
+printf 'install\t%s\n' "$brew_fixture/Brewfile" "$brew_fixture/macos/Brewfile" \
+	"$brew_fixture/macos/Brewfile.personal" >"$brew_expected"
+cmp "$brew_expected" "$brew_log"
+
+: >"$brew_log"
 run_brew_bundle Darwin macos/brew.sh '' --dry-run >/dev/null
-printf 'check\t%s\n' "$brew_fixture/Brewfile" "$brew_fixture/macos/Brewfile" >"$brew_expected"
+printf 'check\t%s\n' "$brew_fixture/Brewfile" \
+	"$brew_fixture/macos/Brewfile" >"$brew_expected"
 cmp "$brew_expected" "$brew_log"
 
 : >"$brew_log"
@@ -293,6 +311,10 @@ if run_brew_bundle Plan9 brew.sh '' --apply >/dev/null 2>&1; then
 fi
 if run_brew_bundle Linux brew.sh '' --unknown >/dev/null 2>&1; then
 	printf 'Homebrew helper accepted an unknown argument\n' >&2
+	exit 1
+fi
+if run_brew_bundle Darwin brew.sh '' --work --personal >/dev/null 2>&1; then
+	printf 'Homebrew helper accepted conflicting machine profiles\n' >&2
 	exit 1
 fi
 [[ ! -s $brew_log ]]

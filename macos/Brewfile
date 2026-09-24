@@ -1,4 +1,5 @@
-# Additions to the shared ../Brewfile, selected only on macOS by ../brew.sh.
+# Core additions to the shared ../Brewfile, selected on every macOS machine.
+# GUI applications are selected separately with --personal or --work.
 # Linux uses APT for Bash, completion, curl, Eternal Terminal, Git,
 # Git LFS, htop, Python, tmux, and wget.
 brew "bash"
@@ -13,18 +14,3 @@ brew "htop"
 brew "python"
 brew "tmux"
 brew "wget"
-
-cask "1Password"
-cask "appcleaner"
-cask "chatgpt"
-cask "codex"
-cask "discord"
-cask "fastmail"
-cask "font-hack-nerd-font"
-cask "ghostty"
-cask "nordvpn"
-cask "rectangle"
-cask "telegram"
-cask "the-unarchiver"
-cask "vlc"
-cask "whatsapp"
