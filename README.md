@@ -327,6 +327,15 @@ bound to `prefix` + `R`. It looks beneath
 `~/repos` by default, checks for `fzf`, and uses only shell behavior available on
 both macOS and Linux.
 
+tmux refreshes the session's `PATH` from the shell when you create or attach to
+a session, so the picker can find Homebrew's `fzf`. After changing your shell's
+`PATH` while already attached, update the running session and reload the config:
+
+```bash
+tmux set-environment PATH "$PATH"
+tmux source-file "$HOME/.tmux.conf"
+```
+
 On `--apply`, bootstrap detects
 [TPM](https://github.com/tmux-plugins/tpm) in explicit `TMUX_TPM_PATH` and
 `TMUX_PLUGIN_MANAGER_PATH` overrides, its standard user and XDG locations, and
