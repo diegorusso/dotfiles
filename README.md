@@ -363,17 +363,40 @@ tmux source-file "$HOME/.tmux.conf"
 In interactive Bash shells, `vi` and `vim` are aliases for `nvim`.
 
 The tracked `.config/nvim` is a complete
-[AstroNvim v5.3.15](https://github.com/AstroNvim/AstroNvim/releases/tag/v5.3.15)
+[AstroNvim v6.1.0](https://github.com/AstroNvim/AstroNvim/releases/tag/v6.1.0)
 user configuration for **Neovim 0.12.x** on macOS, Ubuntu, and Raspberry Pi OS.
 It uses the same plugin revisions and settings on every machine. Bootstrap
 backs up the whole existing Neovim configuration before replacing it.
 
-Aerial is pinned to 3.1.0 for Neovim 0.12's Tree-sitter API, and all active plugins
-use the single `lazy-lock.json`. Plugins used only by older Neovim versions are
-removed from the lock file. LSP callbacks use the 0.12 API directly. Older
-version fallbacks and the 0.13 development-version workaround are removed;
-startup reports a clear error outside the 0.12 release series. The configuration
-is validated with Neovim 0.12.5.
+AstroNvim supplies the Neovim 0.12-compatible Tree-sitter and Aerial defaults;
+there is no local Tree-sitter compatibility patch. AstroCore handles parser
+installation, highlighting, indentation, and textobject mappings. AstroLSP
+uses `vim.lsp.config` and manages native code lenses. Your clangd options,
+disabled format on save, diagnostics preferences, and directory sessions are
+preserved. All active plugins use the single `lazy-lock.json`; plugins removed
+by AstroNvim 6 are removed from the lock. Startup reports a clear error outside
+the Neovim 0.12 release series.
+
+The shared Brewfile includes `tree-sitter-cli`, which is required to compile
+downloaded parsers. Use version 0.26.1 or newer, with a C compiler, `curl`, and
+`tar` available. Linux's `build-essential` package and macOS's Command Line
+Tools provide the compiler. Check `tree-sitter --version`; an old npm wrapper
+earlier on `PATH` can shadow the Homebrew binary (`command -v tree-sitter`).
+
+To upgrade an existing v5 installation, quit Neovim and run from this checkout:
+
+```bash
+brew install tree-sitter-cli
+./bootstrap.sh --apply
+nvim --headless '+Lazy! restore' +qa
+```
+
+Then reopen Neovim. Lazy restores the locked v6 plugins; AstroCore automatically
+downloads missing language parsers. Let the first parser installations finish
+before opening code files. The default parsers are Bash, C, Lua, Markdown,
+Markdown inline, Python, Query, Vim, and Vimdoc. Additional supported languages
+are installed when their files are opened. The upgrade preserves existing
+sessions and plugin data; it does not require deleting Neovim directories.
 
 When AstroNvim is absent and the standard `~/.local/share/nvim` data location
 is absent or empty, `--apply` runs the tracked configuration in isolated
@@ -431,6 +454,21 @@ and macOS bootstrap installation/idempotence, reversible restore and validation
 guards, `~/.config/extra` preservation and startup behavior, permission repair,
 simulated macOS-defaults backup behavior, whitespace, and ShellCheck when it is
 available.
+
+After installing the locked v6 plugins and default parsers and opening a code
+file once to finish completion setup, run the full editor regression with:
+
+```bash
+DOTFILES_NVIM_TEST_DATA="$HOME/.local/share/nvim" ./check.sh
+```
+
+This copies the plugins, parsers, and Mason registry into temporary XDG
+directories, verifies their locked revisions, and tests full startup, Markdown
+code fences and edits, Lua textobject movement, LSP preferences, and directory
+session restore. A temporary test overlay disables background Mason registry
+refreshes. The installed environment remains
+untouched. Without `DOTFILES_NVIM_TEST_DATA`,
+the runtime integration is reported as skipped.
 
 ## License
 

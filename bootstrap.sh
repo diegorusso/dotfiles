@@ -829,7 +829,7 @@ stage_astronvim() {
 	)
 
 	validate_staged_astronvim() {
-		local special_entry
+		local special_entry query_link language query_target
 
 		if ! cmp -s "$scratch_root/nvim/lazy-lock.json" \
 			"$config_home/nvim/lazy-lock.json"; then
@@ -850,6 +850,17 @@ stage_astronvim() {
 				'AstroNvim installation produced an unsupported special file' >&2
 			return 1
 		fi
+		# The v6 parser installer links queries to its plugin with absolute paths.
+		# Make only these known internal links relocatable before copying the tree.
+		for query_link in "$staged_data/site/queries/"*; do
+			[[ -L $query_link ]] || continue
+			language=${query_link##*/}
+			query_target="$staged_data/lazy/nvim-treesitter/runtime/queries/$language"
+			if [[ $(readlink "$query_link") == "$query_target" && -d $query_target ]]; then
+				rm "$query_link"
+				ln -s "../../lazy/nvim-treesitter/runtime/queries/$language" "$query_link"
+			fi
+		done
 		if ! validate_staged_symlinks "$staged_data"; then
 			printf '%s\n' \
 				'AstroNvim installation produced a symlink escaping its data tree' >&2

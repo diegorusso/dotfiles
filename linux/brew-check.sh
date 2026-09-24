@@ -38,6 +38,7 @@ while IFS= read -r formula; do
 		bash-completion@*) continue ;; # Shell data, not an executable.
 		neovim) binary=nvim ;;
 		ripgrep) binary=rg ;;
+		tree-sitter-cli) binary=tree-sitter ;;
 		python|python@*) binary=python3 ;;
 		*) binary=${formula%%@*} ;;
 	esac

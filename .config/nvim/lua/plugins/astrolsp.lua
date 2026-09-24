@@ -24,20 +24,6 @@ return {
         capabilities = { offsetEncoding = "utf-8" },
       },
     },
-    autocmds = {
-      lsp_codelens_refresh = {
-        cond = "textDocument/codeLens",
-        {
-          event = { "InsertLeave", "BufEnter" },
-          desc = "Refresh codelens (buffer)",
-          callback = function(args)
-            if require("astrolsp").config.features.codelens then
-              vim.lsp.codelens.enable(true, { bufnr = args.buf })
-            end
-          end,
-        },
-      },
-    },
     mappings = {
       n = {
         gD = {

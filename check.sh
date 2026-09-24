@@ -16,6 +16,7 @@ bash_files=(
 	macos/defaults.sh
 	macos/interactive.bash
 	check.sh
+	tests/check-nvim.sh
 	.tmux/load-tpm.sh
 	.tmux/layouts/dev-3cols.sh
 	.tmux/layouts/pick-repo.sh
@@ -96,25 +97,7 @@ if command -v nvim >/dev/null 2>&1; then
 		NVIM_LOG_FILE=/dev/null nvim --headless --clean -u NONE -i NONE \
 		-l /dev/stdin <<'LUA'
 local spec = assert(loadfile(vim.env.DOTFILES_ASTROLSP_CHECK))()
-local callback = spec.opts.autocmds.lsp_codelens_refresh[1].callback
 local semantic_tokens_cond = spec.opts.mappings.n["<Leader>uY"].cond
-
-package.loaded.astrolsp = { config = { features = { codelens = true } } }
-
-assert(type(vim.lsp.codelens.enable) == "function")
-local enabled = false
-vim.lsp.codelens.enable = function(value, opts)
-  assert(value == true)
-  assert(opts.bufnr == 17)
-  enabled = true
-end
-vim.lsp.codelens.refresh = function() error "deprecated codelens refresh called" end
-callback { buf = 17 }
-assert(enabled)
-
-package.loaded.astrolsp.config.features.codelens = false
-vim.lsp.codelens.enable = function() error "codelens called while disabled" end
-callback { buf = 17 }
 
 local expected_client = {}
 local supported = false
@@ -128,7 +111,7 @@ assert(semantic_tokens_cond(expected_client, 17) == false)
 supported = true
 assert(semantic_tokens_cond(expected_client, 17) == true)
 LUA
-	printf 'PASS AstroLSP Neovim 0.12 callbacks\n'
+	printf 'PASS AstroLSP Neovim 0.12 mapping condition\n'
 
 	DOTFILES_ASTROCORE_CHECK="$repo_dir/.config/nvim/lua/plugins/astrocore.lua" \
 		NVIM_LOG_FILE=/dev/null nvim --headless --clean -u NONE -i NONE -l /dev/stdin <<'LUA'
@@ -157,25 +140,28 @@ vim.fn.stdpath = function(kind)
 end
 package.loaded.lazy = {
   setup = function(specs, opts)
-    local aerial
+    local astro
     for _, spec in ipairs(specs) do
-      if spec[1] == "stevearc/aerial.nvim" then aerial = spec end
+      if spec[1] == "AstroNvim/AstroNvim" then astro = spec end
     end
-    assert(aerial and aerial.version == "3.1.0", "Wrong Aerial version for Neovim 0.12")
+    assert(astro and astro.version == "6.1.0", "Expected AstroNvim 6.1.0")
     assert(opts.lockfile == config_dir .. "/lazy-lock.json")
     local lock = vim.json.decode(table.concat(vim.fn.readfile(opts.lockfile), "\n"))
-    assert(lock["aerial.nvim"].commit == "645d108a5242ec7b378cbe643eb6d04d4223f034",
-      "Aerial version and restore lock disagree")
+    assert(lock.AstroNvim.commit == "aa0545fc8357009fc8a67e6cd93e7f8544e3aba9",
+      "AstroNvim version and restore lock disagree")
+    assert(lock["nvim-treesitter"].branch == "main", "Legacy Tree-sitter is incompatible with Neovim 0.12")
+    assert(lock["nvim-treesitter-textobjects"].branch == "main")
+    assert(not lock["neoconf.nvim"] and not lock["vim-illuminate"], "Removed v5 plugins remain locked")
   end,
 }
 dofile(config_dir .. "/lua/lazy_setup.lua")
 LUA
-	printf 'PASS Neovim 0.12 requirement and Aerial restore lock\n'
+	printf 'PASS Neovim 0.12 requirement and AstroNvim 6 restore lock\n'
 else
 	printf 'SKIP Neovim Lua syntax (nvim not installed)\n'
-	printf 'SKIP AstroLSP Neovim 0.12 callbacks (nvim not installed)\n'
+	printf 'SKIP AstroLSP Neovim 0.12 mapping condition (nvim not installed)\n'
 	printf 'SKIP AstroCore option values (nvim not installed)\n'
-	printf 'SKIP Neovim 0.12 requirement and Aerial restore lock (nvim not installed)\n'
+	printf 'SKIP Neovim 0.12 requirement and AstroNvim 6 restore lock (nvim not installed)\n'
 fi
 
 if command -v jq >/dev/null 2>&1; then
@@ -196,6 +182,12 @@ cleanup() {
 	esac
 }
 trap cleanup EXIT
+
+if [[ -n ${DOTFILES_NVIM_TEST_DATA:-} ]]; then
+	bash tests/check-nvim.sh "$DOTFILES_NVIM_TEST_DATA"
+else
+	printf 'SKIP AstroNvim runtime integration (set DOTFILES_NVIM_TEST_DATA to installed v6 data)\n'
+fi
 
 # Exercise the package helper without contacting Homebrew or installing tools.
 # A path with spaces also checks argument quoting and invocation outside the repo.
@@ -330,7 +322,7 @@ if [[ $(uname -s) == Linux ]]; then
 	for brew_tool in awk grep readlink; do
 		ln -s "$(command -v "$brew_tool")" "$brew_fake_bin/$brew_tool"
 	done
-	for brew_binary in nvim rg python3 curl git et htop tmux wget uv; do
+	for brew_binary in nvim rg python3 curl git et htop tmux wget uv tree-sitter; do
 		printf '%s\n' '#!/bin/sh' 'exit 97' >"$brew_system_bin/$brew_binary"
 		chmod 755 "$brew_system_bin/$brew_binary"
 	done
@@ -349,7 +341,7 @@ case $1 in
 			nvim) owner=neovim ;;
 			rg) owner=ripgrep:arm64 ;;
 			python3) owner=python3-minimal ;;
-			uv) exit 1 ;; # Manual installation.
+			uv|tree-sitter) exit 1 ;; # Manual installation.
 			wget) owner='wget, another-package' ;; # Ambiguous ownership.
 			*) owner=${lookup##*/} ;;
 		esac
@@ -395,6 +387,7 @@ SH
 			exit 1
 		fi
 		grep -Fq 'uv (no unambiguous dpkg owner;' <<<"$brew_duplicate_output"
+		grep -Fq 'tree-sitter (no unambiguous dpkg owner;' <<<"$brew_duplicate_output"
 		grep -Fq 'wget (no unambiguous dpkg owner;' <<<"$brew_duplicate_output"
 		grep -Fq 'Keep: essential or protected system package.' <<<"$brew_duplicate_output"
 		grep -Fq 'Keep: system shell or Python runtime.' <<<"$brew_duplicate_output"
@@ -1235,6 +1228,9 @@ printf '%s\n' \
 	'  mkdir -p "$XDG_DATA_HOME/nvim/lazy/AstroNvim/lua/astronvim"' \
 	'  printf "offline AstroNvim version\\n" >"$XDG_DATA_HOME/nvim/lazy/AstroNvim/version.txt"' \
 	'  printf "installed by fake nvim\\n" >"$XDG_DATA_HOME/nvim/fake-install-sentinel"' \
+	'  mkdir -p "$XDG_DATA_HOME/nvim/lazy/nvim-treesitter/runtime/queries/lua" "$XDG_DATA_HOME/nvim/site/queries"' \
+	'  printf "query fixture\\n" >"$XDG_DATA_HOME/nvim/lazy/nvim-treesitter/runtime/queries/lua/highlights.scm"' \
+	'  ln -s "$XDG_DATA_HOME/nvim/lazy/nvim-treesitter/runtime/queries/lua" "$XDG_DATA_HOME/nvim/site/queries/lua"' \
 	'}' \
 	'if [[ $phase == health ]]; then' \
 	'  case $CHECK_FAKE_NVIM_MODE in' \
@@ -1429,6 +1425,9 @@ grep -Fxq 'offline AstroNvim version' \
 	"$astro_apply_home/.local/share/nvim/lazy/AstroNvim/version.txt"
 grep -Fxq 'installed by fake nvim' \
 	"$astro_apply_home/.local/share/nvim/fake-install-sentinel"
+[[ $(readlink "$astro_apply_home/.local/share/nvim/site/queries/lua") == \
+	../../lazy/nvim-treesitter/runtime/queries/lua ]]
+grep -Fxq 'query fixture' "$astro_apply_home/.local/share/nvim/site/queries/lua/highlights.scm"
 [[ ! -e "$astro_apply_home/stage-home-sentinel" ]]
 grep -Fqx $'INSTALL\t.local/share/nvim\t-' \
 	"$astro_apply_backup/restore.manifest"

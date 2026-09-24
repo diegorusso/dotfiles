@@ -1,7 +1,7 @@
 require("lazy").setup({
   {
     "AstroNvim/AstroNvim",
-    version = "5.3.15",
+    version = "6.1.0",
     import = "astronvim.plugins",
     opts = {
       mapleader = " ",
@@ -12,8 +12,6 @@ require("lazy").setup({
     },
   },
   { import = "plugins" },
-  -- Aerial 3.1 supports Neovim 0.12's Tree-sitter API.
-  { "stevearc/aerial.nvim", version = "3.1.0" },
 } --[[@as LazySpec]], {
   lockfile = vim.fn.stdpath "config" .. "/lazy-lock.json",
   install = { colorscheme = { "astrotheme", "habamax" } },
