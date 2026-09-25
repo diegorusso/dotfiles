@@ -342,6 +342,39 @@ bound to `prefix` + `R`. It looks beneath
 `~/repos` by default, checks for `fzf`, and uses only shell behavior available on
 both macOS and Linux.
 
+Personalise tmux on each device using the local `~/.config/extra` file:
+
+```bash
+export DOTFILES_TMUX_DEVICE="LINUX-VM"
+export DOTFILES_TMUX_COLOUR="green"
+```
+
+Suggested settings for the four devices:
+
+| Device | `DOTFILES_TMUX_DEVICE` | `DOTFILES_TMUX_COLOUR` |
+| --- | --- | --- |
+| Work Mac | `WORK-MAC` | `blue` |
+| Linux VM | `LINUX-VM` | `green` |
+| Personal Mac | `PERSONAL-MAC` | `purple` |
+| Raspberry Pi 5 | `RPI5` | `orange` |
+
+The label appears beside the session name in the status bar and in the terminal
+window/tab title where supported. The status bar, active window, and active pane
+border share the chosen accent. With no label, tmux uses its host's short
+hostname; an unset or unknown colour defaults to green. Colours use a consistent
+256-colour palette. These settings describe the machine running tmux, including
+when you connect to it over SSH or mosh.
+
+New sessions and attachments inherit these values from the connecting shell.
+After editing `~/.config/extra`, apply them to an already attached session with:
+
+```bash
+source "$HOME/.config/extra"
+tmux set-environment DOTFILES_TMUX_DEVICE "${DOTFILES_TMUX_DEVICE:-}"
+tmux set-environment DOTFILES_TMUX_COLOUR "${DOTFILES_TMUX_COLOUR:-}"
+tmux source-file "$HOME/.tmux.conf"
+```
+
 tmux refreshes the session's `PATH` from the shell when you create or attach to
 a session, so the picker can find Homebrew's `fzf`. After changing your shell's
 `PATH` while already attached, update the running session and reload the config:
