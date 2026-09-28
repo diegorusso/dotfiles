@@ -391,9 +391,15 @@ common Homebrew, Linuxbrew, and Linux package locations. If it is absent,
 bootstrap stages and validates a clone of the official repository before
 installing the pinned v3.1.0 release at `~/.tmux/plugins/tpm`; dry runs never
 access the network. Bootstrap requires the TPM entrypoint to be a regular
-executable and does not update or replace an existing installation. Press
-`prefix` + `I` inside tmux once to install the configured tmux-resurrect and
-tmux-continuum plugins.
+executable and does not update or replace an existing installation.
+
+When tmux starts or its configuration is reloaded, the loader uses TPM to
+install missing configured plugins before loading them. Existing plugins are
+left at their installed versions; no update or network access is needed when
+all plugins are present. The first startup needs GitHub access. If installation
+fails, tmux still starts with the available plugins and retries on the next
+configuration reload or server startup. You can also press `prefix` + `I` to
+retry manually. Bootstrap previews only discover TPM and never install plugins.
 
 The work-only `prefix` + `P` and `prefix` + `S` layouts are enabled when their
 repository paths are exported from `~/.config/extra`:

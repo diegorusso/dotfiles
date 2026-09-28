@@ -19,12 +19,34 @@ if [ "$#" -ne 0 ]; then
   exit 2
 fi
 
+install_missing_plugins() {
+  installer="${1%/*}/bin/install_plugins"
+  [ -x "$installer" ] && [ -n "${TMUX:-}" ] || return 0
+
+  # TPM normally sets this before loading plugins. Set the same default here
+  # so installation can finish before any plugin (including restore) runs.
+  if ! tmux show-environment -g TMUX_PLUGIN_MANAGER_PATH >/dev/null 2>&1; then
+    plugin_path="$HOME/.tmux/plugins/"
+    if [ -f "$xdg_config_home/tmux/tmux.conf" ]; then
+      plugin_path="$xdg_config_home/tmux/plugins/"
+    fi
+    tmux set-environment -g TMUX_PLUGIN_MANAGER_PATH "$plugin_path"
+  fi
+
+  # TPM skips installed repositories; this never pulls or updates them.
+  # Keep tmux usable offline, and retry missing plugins on the next reload.
+  if ! "$installer" >/dev/null; then
+    tmux display-message 'Plugin installation failed; press prefix + I to retry.' || :
+  fi
+}
+
 use_tpm() {
   [ -n "$1" ] && [ -f "$1" ] && [ -x "$1" ] || return 1
   if [ "$print_path" = true ]; then
     printf '%s\n' "$1"
     exit 0
   fi
+  install_missing_plugins "$1"
   exec "$1"
 }
 
