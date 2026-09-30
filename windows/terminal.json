@@ -1,0 +1,39 @@
+{
+    "profiles": [
+        {
+            "guid": "{88986428-b62f-4b2a-93a0-9dce7c5e073b}",
+            "name": "Dotfiles PowerShell",
+            "commandline": "pwsh.exe -NoLogo",
+            "startingDirectory": "%USERPROFILE%",
+            "colorScheme": "Dotfiles Catppuccin Mocha",
+            "font": { "face": "Hack Nerd Font Mono", "size": 12 },
+            "padding": "8",
+            "cursorShape": "bar"
+        }
+    ],
+    "schemes": [
+        {
+            "name": "Dotfiles Catppuccin Mocha",
+            "background": "#1e1e2e",
+            "foreground": "#cdd6f4",
+            "cursorColor": "#f5e0dc",
+            "selectionBackground": "#585b70",
+            "black": "#45475a",
+            "red": "#f38ba8",
+            "green": "#a6e3a1",
+            "yellow": "#f9e2af",
+            "blue": "#89b4fa",
+            "purple": "#f5c2e7",
+            "cyan": "#94e2d5",
+            "white": "#bac2de",
+            "brightBlack": "#585b70",
+            "brightRed": "#f38ba8",
+            "brightGreen": "#a6e3a1",
+            "brightYellow": "#f9e2af",
+            "brightBlue": "#89b4fa",
+            "brightPurple": "#f5c2e7",
+            "brightCyan": "#94e2d5",
+            "brightWhite": "#a6adc8"
+        }
+    ]
+}

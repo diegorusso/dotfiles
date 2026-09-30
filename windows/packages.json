@@ -1,0 +1,28 @@
+{
+    "core": [
+        { "id": "Microsoft.PowerShell" },
+        { "id": "Microsoft.WindowsTerminal" },
+        { "id": "Git.Git" },
+        { "id": "GitHub.GitLFS" },
+        { "id": "Starship.Starship" },
+        { "id": "Neovim.Neovim", "version": "0.12.5" },
+        { "id": "BurntSushi.ripgrep.MSVC" },
+        { "id": "junegunn.fzf" },
+        { "id": "astral-sh.uv" },
+        { "id": "zig.zig" }
+    ],
+    "work": [
+        { "id": "AgileBits.1Password" },
+        { "id": "Discord.Discord" },
+        { "id": "7zip.7zip" }
+    ],
+    "personal": [
+        { "id": "AgileBits.1Password" },
+        { "id": "Discord.Discord" },
+        { "id": "7zip.7zip" },
+        { "id": "Microsoft.PowerToys" },
+        { "id": "Telegram.TelegramDesktop" },
+        { "id": "VideoLAN.VLC" },
+        { "id": "NordSecurity.NordVPN" }
+    ]
+}

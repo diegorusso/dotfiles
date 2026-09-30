@@ -1,14 +1,17 @@
 # Diego's cross-platform dotfiles
 
-One Bash-based command-line environment for:
+Shared command-line configuration with Bash on Linux/macOS and native
+PowerShell on Windows, for:
 
 - Raspberry Pi OS and other Debian-family Linux hosts
 - work and personal macOS machines, on Intel or Apple Silicon
 - Linux development VMs
+- work and personal Windows machines
 
 Shared behavior is kept portable. macOS and Linux commands are loaded only on
 their matching platform, while employer-, role-, and machine-specific values
-stay in the untracked `~/.config/extra` file.
+stay in the untracked `~/.config/extra` file for Bash or
+`~/.config/extra.ps1` for PowerShell.
 
 This repository descends from Mathias Bynens' dotfiles and retains the original
 MIT license and attribution in the Git history. Its installation and active
@@ -28,11 +31,137 @@ astronvim-health.lua         bootstrap-only AstroNvim startup validator
 Brewfile, brew.sh            shared Homebrew CLI packages and bundle helper
 macos/                       macOS Homebrew additions, Bash settings, and defaults
 linux/                       Linux Bash, system packages, and brew prerequisites
+windows/                     native PowerShell, Terminal, WinGet packages, and checks
 bootstrap.sh                 Homebrew setup and explicit dotfile installer
+bootstrap.ps1                native Windows dotfile installer and restore helper
 check.sh                     local static and isolated integration validation
 ```
 
-## Install or update dotfiles
+## Native Windows
+
+Windows uses PowerShell 7, Windows Terminal, and WinGet. Git, the Catppuccin
+Starship prompt, and the complete Neovim configuration share the repository
+sources used by Linux and macOS. Windows has its own shell functions and package
+profiles. Terminal panes provide the native split-window workflow.
+
+Clone this repository using Git for Windows, then open PowerShell in the checkout.
+The package helper also works in the built-in Windows PowerShell 5.1, allowing
+it to install PowerShell 7 on a new machine:
+
+```powershell
+.\windows\packages.ps1
+.\windows\packages.ps1 -Apply
+```
+
+Preview only prints commands and stays offline. Apply installs the core WinGet
+list in `windows/packages.json`, then installs the standalone Tree-sitter CLI
+**0.26.13** from its [official release](https://github.com/tree-sitter/tree-sitter/releases/tag/v0.26.13),
+verifying the published SHA-256 digest. The helper selects the ARM64, x64, or x86
+binary for the host and retains an existing standalone CLI at 0.26.1 or newer.
+The executable lives under `%LOCALAPPDATA%\dotfiles\bin`; the PowerShell layer
+adds that directory to `PATH`. Zig supplies a native C compiler for Neovim
+parsers; the shell sets `CC=zig cc` and `CXX=zig c++` when these values are unset.
+Unversioned WinGet packages use `--no-upgrade`; Neovim explicitly
+selects **0.12.5** to satisfy this repository's **0.12.x** requirement. An older
+Neovim is upgraded by this step.
+Package installation may request elevation through its individual installers.
+
+Optional application profiles add to the core tools:
+
+```powershell
+.\windows\packages.ps1 -Profile Work
+.\windows\packages.ps1 -Profile Work -Apply
+.\windows\packages.ps1 -Profile Personal -Apply
+```
+
+Work adds 1Password, Discord, and 7-Zip. Personal adds these plus PowerToys,
+Telegram, VLC, and NordVPN. Review the selected list against your employer's
+Windows policies before applying it.
+
+Open a new **PowerShell 7** session after package installation, then preview
+and apply the dotfiles:
+
+```powershell
+.\bootstrap.ps1
+.\bootstrap.ps1 -Diff
+.\bootstrap.ps1 -Apply
+```
+
+Bootstrap installs:
+
+| Configuration | Windows destination |
+| --- | --- |
+| Git defaults and ignores | `~/.gitconfig`, `~/.gitignore` |
+| Shared Starship prompt | `~/.config/starship.toml` |
+| PowerShell entrypoint | `$PROFILE.CurrentUserAllHosts` |
+| Native shell layer | `~/.config/dotfiles/windows/interactive.ps1` |
+| Shared Neovim configuration | `%LOCALAPPDATA%\nvim` |
+| Terminal profile and colours | `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\dotfiles\terminal.json` |
+
+The profile destination comes from PowerShell itself, including redirected
+Documents folders. Host-specific PowerShell profiles still run afterward.
+The [Terminal fragment](https://learn.microsoft.com/en-us/windows/terminal/json-fragment-extensions)
+adds **Dotfiles PowerShell** and its Catppuccin Mocha scheme. Select that profile
+as your default in Terminal Settings > Startup. Install **Hack Nerd Font Mono**
+from the [official Nerd Fonts downloads](https://www.nerdfonts.com/font-downloads)
+to display Starship's symbols correctly. Terminal reads this font from the
+fragment when opening the profile.
+
+Bootstrap copies managed files and the Neovim tree, backing up changed targets
+under `%LOCALAPPDATA%\dotfiles\backups\TIMESTAMP-ID`. It prints the backup path
+and undo command before replacing targets. Preview and repeated applies make
+no backup when there are no changes. Restore validates its complete manifest
+before applying changes and saves the current state in a new backup, which
+can itself be restored:
+
+```powershell
+.\bootstrap.ps1 -Restore "$env:LOCALAPPDATA\dotfiles\backups\TIMESTAMP-ID"
+.\bootstrap.ps1 -Restore "$env:LOCALAPPDATA\dotfiles\backups\TIMESTAMP-ID" -Apply
+```
+
+The optional `-Diff` flag works for restore too. Symlinks, junctions, and
+other reparse points that can redirect writes are rejected in managed paths;
+OneDrive cloud placeholders are supported. Concurrent applies use
+an exclusive file lock, released automatically when the process exits. A forced
+termination between moving an original into the backup and recording it in
+`restore.json` may require recovering that item manually from `saved` in the
+printed backup. Packages and Neovim runtime/plugin data are outside the restore
+manifest. Neovim downloads its locked plugins on first launch; an existing plugin
+installation can be aligned with `nvim --headless '+Lazy! restore' +qa`.
+Custom `XDG_CONFIG_HOME` or `NVIM_APPNAME` configuration namespaces are skipped.
+
+Open a new PowerShell session to activate changes. The shell sets up Starship,
+PSReadLine history search and completion, `g`/`vi`/`vim`, `..`/`...`, `mkd`,
+`open`, clipboard alias `c`, and a `repos` directory picker using fzf.
+Machine-specific settings are sourced last from `~/.config/extra.ps1`:
+
+```powershell
+# ~/.config/extra.ps1, created and maintained locally
+$env:WORKSPACE_ROOT = Join-Path $HOME 'work'
+$env:GIT_AUTHOR_EMAIL = 'work-address@example.com'
+$env:GIT_COMMITTER_EMAIL = $env:GIT_AUTHOR_EMAIL
+```
+
+The Git identity overrides apply to processes started from that PowerShell
+session. Verify them with `git var GIT_AUTHOR_IDENT` and
+`git var GIT_COMMITTER_IDENT`. Bootstrap preserves both local override files.
+
+If PowerShell prevents local scripts from running, inspect `Get-ExecutionPolicy
+-List` and use an execution policy permitted by your machine's administrator.
+Bootstrap does not change execution policy.
+
+Run the native validation from PowerShell 7:
+
+```powershell
+.\windows\check.ps1
+```
+
+It checks syntax and JSON, offline previews, installation and repeated applies,
+restore and its undo, local override preservation, redirected profile paths,
+custom editor namespaces, junction rejection, and package selection/failures.
+The checks use temporary folders and command doubles for package installers.
+
+## Install or update Linux and macOS dotfiles
 
 Clone this fork wherever you keep source repositories:
 
