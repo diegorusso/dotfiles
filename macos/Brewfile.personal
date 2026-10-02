@@ -2,6 +2,7 @@
 cask "1password"
 cask "appcleaner"
 cask "chatgpt"
+cask "claude"
 cask "codex"
 cask "discord"
 cask "fastmail"
