@@ -305,6 +305,7 @@ bash_files=(
 tmux_layout_files=(
 	dev-3cols.sh
 	pick-repo.sh
+	workspace.py
 )
 nvim_files=(
 	init.lua

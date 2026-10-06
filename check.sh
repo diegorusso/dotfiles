@@ -17,6 +17,7 @@ bash_files=(
 	macos/interactive.bash
 	check.sh
 	tests/check-nvim.sh
+	tests/check-tmux.sh
 	.tmux/load-tpm.sh
 	.tmux/layouts/dev-3cols.sh
 	.tmux/layouts/pick-repo.sh
@@ -60,6 +61,8 @@ awk '
 	END { exit failed }
 ' linux/packages.txt
 printf 'PASS package manifest shape\n'
+
+bash tests/check-tmux.sh
 
 if command -v nvim >/dev/null 2>&1; then
 	nvim_version=$(NVIM_LOG_FILE=/dev/null nvim --version |

@@ -352,7 +352,7 @@ machine's SSH keys or forwarded agent:
 Homebrew manages shared CLI tools on macOS, Ubuntu, and Raspberry Pi OS. The
 root `Brewfile` contains Neovim, Starship, and the other shared tools.
 Linux uses APT for Bash, bash-completion, curl, Eternal Terminal (`et`), Git,
-Git LFS, htop, Python, tmux, and wget; these are listed in `linux/packages.txt`.
+Git LFS, htop, jq, lsof, Python, tmux, and wget; these are listed in `linux/packages.txt`.
 `macos/Brewfile` supplies their Homebrew equivalents on macOS, along with
 GUI/font casks and Colima/Docker. Linux uses only the root Brewfile.
 
@@ -466,21 +466,74 @@ Bootstrap copies files; it does not keep them linked or synchronize edits back.
 
 ## tmux
 
-The configuration targets tmux 3.2 or newer. The generic repository picker is
-bound to `prefix` + `R`. It looks beneath
-`~/repos` by default, checks for `fzf`, and uses only shell behavior available on
-both macOS and Linux.
+The configuration targets tmux 3.2 or newer on macOS and Linux, with Python
+3.9+, Git and fzf. Keep using the existing session and pane shortcuts; each
+checkout has reusable `dev`, `logs` and `tests` windows. The development layout
+is still Neovim / shell / Codex in three equal columns.
+
+| Shortcut (after Ctrl+B) | Action |
+| --- | --- |
+| `R` | Pick a repository or any registered Git worktree, including those outside `~/repos` |
+| `M` | Open/reuse the system monitor (`htop`, falling back to `top`) |
+| `L` | Open/reuse Ralphex logs for this exact checkout |
+| `T` | Open/reuse a shell for this checkout's test commands |
+| `A` | Open the ccmux agent picker with live status and pane preview |
+| `B` | Toggle ccmux's optional sidebar |
+| `r` | Reload the installed tmux configuration |
+| `Ctrl+S` / `Ctrl+R` | Save / restore through tmux-resurrect |
+
+The picker starts beneath `~/repos` (`@repo-root` changes that root) and lists
+Git's registered worktrees, with checkout and branch labels. Branch labels in
+window names and pane borders refresh automatically. Reopening a checkout
+reuses its existing development window even after Resurrect loses custom tmux
+options. Two repositories with the same folder name remain separate.
+
+A single background watcher discovers Ralphex processes and their open output
+logs. If that repository is already open, it adds a `:logs` window for the
+runner's exact worktree without moving your focus or starting another agent.
+The log follows appends, rotation and subsequent runs. Finished logs remain
+visible. Ctrl+C stops the viewer for that run; `L` explicitly restarts it. If
+you close a log window, it stays closed until the next run. `T` opens a shell;
+it does not infer or execute a repository's test suite.
+
+Install packages with `./brew.sh --apply` and dotfiles with
+`./bootstrap.sh --apply`. Once per host, configure Codex status tracking:
+
+```bash
+ccmux setup --agent codex
+```
+
+[ccmux](https://github.com/epilande/ccmux) tracks agents on that host. Newly
+started Codex sessions load its hooks; review/trust the hooks if Codex asks.
+Existing agents remain running and can appear through process detection, but
+need their next launch for authoritative conversation matching. The default
+is the popup; the sidebar is optional and consumes pane width. Notifications
+retain ccmux's default off setting.
+
+Resurrect's save hook records `codex resume <conversation-id>` for each
+identified Codex pane, with its checkout path. If the ID cannot be verified,
+restore opens Codex's resume picker instead of choosing a conversation. Normal
+new development windows retain `codex resume --last || codex`, scoped by Codex
+to that checkout. Neovim's existing Resession plugin restores its saved editor
+session from the checkout directory. This restores saved conversations and
+editor sessions; it does not checkpoint an in-flight agent turn, unsaved
+buffers, or a running test process. Detaching tmux keeps live processes intact.
+
+Run `./tests/check-tmux.sh` for the focused isolated-server checks. Helper state
+lives under `${XDG_STATE_HOME:-~/.local/state}/dotfiles-tmux` and is not tracked.
+To customize launches without editing a helper, set `@dev-editor-command`,
+`@dev-assistant-command` or `@monitor-command` in tmux (`none` disables a tool).
 
 Personalise tmux on each device using the local `~/.config/extra` file:
 
 ```bash
-export DOTFILES_TMUX_DEVICE="LINUX-VM"
-export DOTFILES_TMUX_COLOUR="green"
+export DOTFILES_DEVICE="LINUX-VM"  # Optional; defaults to the short hostname.
+export DOTFILES_COLOUR="green"
 ```
 
 Suggested settings for the four devices:
 
-| Device | `DOTFILES_TMUX_DEVICE` | `DOTFILES_TMUX_COLOUR` |
+| Device | `DOTFILES_DEVICE` | `DOTFILES_COLOUR` |
 | --- | --- | --- |
 | Work Mac | `WORK-MAC` | `blue` |
 | Linux VM | `LINUX-VM` | `green` |
@@ -499,8 +552,8 @@ After editing `~/.config/extra`, apply them to an already attached session with:
 
 ```bash
 source "$HOME/.config/extra"
-tmux set-environment DOTFILES_TMUX_DEVICE "${DOTFILES_TMUX_DEVICE:-}"
-tmux set-environment DOTFILES_TMUX_COLOUR "${DOTFILES_TMUX_COLOUR:-}"
+tmux set-environment DOTFILES_DEVICE "${DOTFILES_DEVICE:-}"
+tmux set-environment DOTFILES_COLOUR "${DOTFILES_COLOUR:-}"
 tmux source-file "$HOME/.tmux.conf"
 ```
 

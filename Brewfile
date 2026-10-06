@@ -1,6 +1,7 @@
 # Shared CLI tools for macOS and Linux; Linux system tools stay in APT.
 # macOS additions are in macos/Brewfile.
 brew "fzf"
+brew "ccmux"
 brew "neovim"
 brew "ripgrep"
 brew "shellcheck"

@@ -9,7 +9,7 @@ message() {
   fi
 }
 
-for dependency in sort fzf; do
+for dependency in python3 fzf; do
   if ! command -v "$dependency" >/dev/null 2>&1; then
     message "Repository picker requires '$dependency'."
     exit 1
@@ -37,18 +37,12 @@ fi
 
 BASE="$(CDPATH='' cd -- "$BASE" && pwd -P)"
 
-# A shell glob avoids GNU-only `find -printf` and also includes repositories
-# reached through directory symlinks. Hidden directories are intentionally
-# omitted from the interactive list.
+# Keep canonical checkout paths separate from readable repository/worktree names.
 DIR="$(
-  for path in "$BASE"/*; do
-    [ -d "$path" ] || continue
-    printf '%s\n' "${path##*/}"
-  done |
-    LC_ALL=C sort |
-    fzf --prompt='Repo> ' --height=40% --reverse
+  python3 "$SCRIPT_DIR/workspace.py" list "$BASE" |
+    fzf --delimiter=$'\t' --with-nth=2.. --prompt='Repo / worktree> ' --reverse
 )" || exit 0
 
 [ -n "${DIR:-}" ] || exit 0
 
-"$LAYOUT" "$BASE/$DIR"
+"$LAYOUT" "${DIR%%$'\t'*}"

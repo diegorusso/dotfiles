@@ -14,7 +14,9 @@ git
 git-lfs
 htop
 iproute2
+jq
 less
+lsof
 openssl
 procps
 python3
