@@ -507,8 +507,13 @@ ccmux setup --agent codex
 started Codex sessions load its hooks; review/trust the hooks if Codex asks.
 Existing agents remain running and can appear through process detection, but
 need their next launch for authoritative conversation matching. The default
-is the popup; the sidebar is optional and consumes pane width. Notifications
-retain ccmux's default off setting.
+is the popup; the sidebar is optional and consumes pane width. Use `B` to toggle
+it with layout preservation: closing it with `B`, `q`, or tmux's pane-close
+shortcut restores each window's previous pane sizes. New windows opened while
+the sidebar is enabled are covered too. If working panes were added or removed
+while it was open, their changed layout is preserved. Calling
+`ccmux sidebar --toggle` directly bypasses the initial layout snapshot.
+Notifications retain ccmux's default off setting.
 
 Resurrect's save hook records `codex resume <conversation-id>` for each
 identified Codex pane, with its checkout path. If the ID cannot be verified,

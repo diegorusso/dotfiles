@@ -121,6 +121,57 @@ def view_kind(pane):
          or pane["window_name"] == v), "")
 
 
+def sidebar_windows():
+    keys = ("window_id", "window_layout", "pane_id", "pane_title", "pane_start_command")
+    rows = tmux("list-panes", "-a", "-F", SEP.join("#{" + key + "}" for key in keys))
+    windows = {}
+    for row in rows.splitlines():
+        window, layout, pane, title, command = row.split(SEP, 4)
+        state = windows.setdefault(window, {"layout": layout, "panes": [], "sidebar": False})
+        state["panes"].append(pane)
+        # ccmux delays startup in background windows, so the title alone is
+        # insufficient immediately after its split-window command returns.
+        if title == "ccmux-sidebar" or re.search(r'''(?:^|[/\s"'])ccmux\s+sidebar(?:[\s"']|$)''', command):
+            state["sidebar"] = True
+    return windows
+
+
+def save_sidebar_layouts(target=None):
+    for window, state in sidebar_windows().items():
+        if (target is None or window == target) and not state["sidebar"]:
+            tmux("set-option", "-w", "-t", window, "@dotfiles-sidebar-layout", json.dumps(state))
+
+
+def restore_sidebar_layouts(target=None):
+    for window, state in sidebar_windows().items():
+        if (target is not None and window != target) or state["sidebar"]:
+            continue
+        saved = option("@dotfiles-sidebar-layout", window)
+        if not saved:
+            continue
+        original = json.loads(saved)
+        # select-layout can move pane contents when IDs no longer match. Keep
+        # the current layout if working panes were added or removed meanwhile.
+        if set(original["panes"]) == set(state["panes"]):
+            tmux("select-layout", "-t", window, original["layout"])
+        tmux("set-option", "-wu", "-t", window, "@dotfiles-sidebar-layout")
+
+
+def toggle_sidebar():
+    if not shutil.which("ccmux"):
+        raise RuntimeError("The agent sidebar requires ccmux")
+    with locked("sidebar"):
+        # A close hook may still be queued when the next toggle arrives.
+        restore_sidebar_layouts()
+        save_sidebar_layouts()
+        try:
+            result = run(["ccmux", "sidebar", "--toggle"])
+        finally:
+            restore_sidebar_layouts()
+        if result.returncode:
+            raise RuntimeError(result.stderr.strip() or "ccmux sidebar toggle failed")
+
+
 def view_path(pane):
     return pane.get("@repo-path") or checkout(pane["pane_current_path"])
 
@@ -426,7 +477,8 @@ def save_layout(path, agents=None):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["list", "dev", "tests", "logs", "monitor", "watch", "follow", "save", "refresh"])
+    parser.add_argument("action", choices=["list", "dev", "tests", "logs", "monitor", "watch", "follow", "save", "refresh",
+                                          "sidebar", "sidebar-save", "sidebar-restore"])
     parser.add_argument("argument", nargs="?")
     args = parser.parse_args()
     if args.action == "list":
@@ -438,6 +490,16 @@ def main():
         watch()
     elif args.action == "save":
         save_layout(args.argument)
+    elif args.action == "sidebar":
+        toggle_sidebar()
+    elif args.action in ("sidebar-save", "sidebar-restore"):
+        with locked("sidebar"):
+            if args.action == "sidebar-save":
+                # Only ccmux's auto-open hook needs a pre-split snapshot.
+                if "ccmux sidebar" in tmux("show-hooks", "-g", "after-new-window"):
+                    save_sidebar_layouts(args.argument)
+            else:
+                restore_sidebar_layouts(args.argument)
     else:
         pane = caller(args.argument if args.action != "dev" else None)
         with locked("layout"):
