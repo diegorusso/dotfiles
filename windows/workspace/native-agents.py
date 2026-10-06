@@ -1,7 +1,6 @@
 """Native process-based agent navigation. No agent hooks or daemon are installed."""
 import argparse
 import importlib.util
-import os
 from pathlib import Path
 import re
 import shutil
@@ -92,10 +91,17 @@ def add_sidebar(workspace, window):
         return
     workspace.save_sidebar_layouts(window)
     command = workspace.shell_command([sys.executable, str(Path(__file__).resolve()), "render", "--workspace", str(workspace.SCRIPT)])
-    pane = workspace.tmux("split-window", "-h", "-d", "-P", "-F", "#{pane_id}", "-l", "30", "-t", window, "--", command)
-    # PSMux 3.3.8 reports default-shell for pane_start_command. Mark the pane
-    # while holding the sidebar lock, before the renderer has finished loading.
-    workspace.set_pane_role(pane, "dotfiles-agent-sidebar")
+    # PSMux 3.3.8 calculates split-window -l against the entire window, then
+    # applies that percentage to the selected pane. Calculate the percentage
+    # from that pane's usable width, including PSMux's integer rounding.
+    width = int(workspace.tmux("display-message", "-p", "-t", window, "#{pane_width}"))
+    available = max(1, width - 1)
+    desired = min(30, max(1, available - 2))
+    percent = min(range(1, 100), key=lambda value: abs((available * value + 99) // 100 - desired))
+    # Mark the pane at creation: pane_start_command reports default-shell in
+    # PSMux 3.3.8, and select-pane -T would move focus to the new sidebar.
+    workspace.tmux("split-window", "-h", "-d", "-P", "-F", "#{pane_id}", "-T", "dotfiles-agent-sidebar",
+                   "-p", str(percent), "-t", window, "--", command)
     workspace.tmux("set-option", "-w", "-t", window, "@native-sidebar-visited", "yes")
 
 
@@ -132,7 +138,6 @@ def toggle_sidebar(workspace):
 
 def render(workspace):
     import msvcrt
-    workspace.tmux("select-pane", "-t", os.environ["TMUX_PANE"], "-T", "dotfiles-agent-sidebar")
     selection, refresh_at, rows = 0, 0, []
     try:
         print("\033[?25l", end="", flush=True)

@@ -249,18 +249,24 @@ class NativeWorkspaceTests(unittest.TestCase):
         window, _, _ = workspace.ensure_view(self.session, self.repo, "dev")
         workspace.tmux("resize-pane", "-t", window + ".0", "-x", "75")
         before = workspace.tmux("display-message", "-p", "-t", window, "#{window_layout}")
+        active = workspace.tmux("display-message", "-p", "#{pane_id}")
         self.agents.toggle_sidebar(workspace)
         self.wait_for(lambda: window in self.agents.sidebar_panes(workspace)[1])
         windows = {row['window_id'] for row in workspace.panes()}
         self.wait_for(lambda: windows == set(self.agents.sidebar_panes(workspace)[1]))
         for sidebar in self.agents.sidebar_panes(workspace)[1].values():
+            width = int(workspace.tmux("display-message", "-p", "-t", sidebar, "#{pane_width}"))
+            self.assertLessEqual(abs(width - 30), 1)
             try:
                 self.wait_for(lambda: "Agents" in workspace.tmux("capture-pane", "-p", "-t", sidebar))
             except AssertionError:
                 self.fail(workspace.tmux("capture-pane", "-p", "-t", sidebar))
+        self.assertEqual(active, workspace.tmux("display-message", "-p", "#{pane_id}"))
         self.agents.toggle_sidebar(workspace)
+        self.wait_for(lambda: not self.agents.sidebar_panes(workspace)[1])
         after = workspace.tmux("display-message", "-p", "-t", window, "#{window_layout}")
         self.assertEqual(before, after)
+        self.assertEqual(active, workspace.tmux("display-message", "-p", "#{pane_id}"))
 
     def test_log_registration_is_namespace_scoped(self):
         workspace = self.workspace
@@ -299,13 +305,40 @@ class NativeWorkspaceTests(unittest.TestCase):
         keys = self.workspace.tmux("list-keys", "-T", "prefix")
         for key in ("R", "M", "L", "T", "A", "B"):
             self.assertIn(" " + key + " ", keys)
+        for key in ("M", "L", "T", "B", "P", "S"):
+            binding = next(line.split(" " + key + " ", 1)[1] for line in keys.splitlines()
+                           if " " + key + " " in line)
+            self.assertTrue(binding.startswith("run-shell "), binding)
+            self.assertFalse(binding.startswith("run-shell -b "), binding)
+        sidebar_command = next(line.split(" B ", 1)[1] for line in keys.splitlines() if " B " in line)
+        registry = Path(os.environ.get('PSMUX_DATA_DIR', str(Path.home() / '.psmux')))
+        base = self.namespace + '__trial'
+        port = int((registry / (base + '.port')).read_text())
+        key = (registry / (base + '.key')).read_text().strip()
+
+        def press_sidebar_binding():
+            # Attached clients send this stored command to the server. A CLI
+            # run-shell without formats runs locally and misses handle failures.
+            with socket.create_connection(('127.0.0.1', port), timeout=30) as connection:
+                connection.sendall(('AUTH ' + key + '\n' + sidebar_command + '\n').encode('utf-8'))
+                connection.shutdown(socket.SHUT_WR)
+                with connection.makefile('r', encoding='utf-8') as reader:
+                    self.assertEqual('OK', reader.readline().strip())
+                    output = reader.read()
+            self.assertEqual('', output.strip())
+            report = self.root / 'hook-sidebar.txt'
+            self.assertTrue(report.exists())
+            self.assertEqual('', report.read_text(encoding='utf-8-sig').strip())
+
         directory = self.root / "launcher checkout"
         directory.mkdir()
         command = ["pwsh", "-NoLogo", "-NoProfile", "-File", str(wrapper), "dev", str(directory), "-WorkspaceScript", str(self.workspace.SCRIPT)]
         result = subprocess.run(command, text=True, capture_output=True, timeout=30)
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertTrue(any(p["@repo-path"] == str(directory) and p["@repo-view"] == "dev" for p in self.workspace.panes()))
-        self.workspace.tmux("set-option", "-g", "@dotfiles-native-sidebar", "on")
+        press_sidebar_binding()
+        self.assertEqual({p['window_id'] for p in self.workspace.panes()},
+                         set(self.agents.sidebar_panes(self.workspace)[1]))
         created = self.workspace.tmux("new-window", "-d", "-P", "-F", "#{window_id}", "-n", "hook test")
         try:
             self.wait_for(lambda: created in self.agents.sidebar_panes(self.workspace)[1])
@@ -313,7 +346,8 @@ class NativeWorkspaceTests(unittest.TestCase):
             reports = '\n'.join(path.name + ': ' + path.read_text(encoding='utf-8-sig')
                                 for path in self.root.glob('hook-*.txt'))
             self.fail('Sidebar hook did not add a pane:\n' + reports)
-        self.agents.toggle_sidebar(self.workspace)
+        press_sidebar_binding()
+        self.wait_for(lambda: not self.agents.sidebar_panes(self.workspace)[1])
 
 
 if __name__ == "__main__":
