@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Small tmux checkout helper. Native tmux owns all panes and their lifetime."""
 import argparse
+import base64
 from collections import deque
 from contextlib import contextmanager
-import fcntl
 import hashlib
 import json
 import os
@@ -16,19 +16,63 @@ import sys
 import tempfile
 import time
 
+WINDOWS = os.name == "nt"
+if WINDOWS:
+    import msvcrt
+else:
+    import fcntl
+
 SCRIPT = Path(__file__).resolve()
 STATE = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "dotfiles-tmux"
+MUX = "psmux" if WINDOWS else "tmux"
+MUX_ARGS = ["-L", os.environ["DOTFILES_MUX_NAMESPACE"]] if os.environ.get("DOTFILES_MUX_NAMESPACE") else []
+NATIVE_POPUP_SESSION = None
 SEP = "|||"
 UUID = re.compile(r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\Z")
 
 
 def run(argv):
     return subprocess.run(list(map(str, argv)), text=True, stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE, timeout=10)
+                          stderr=subprocess.PIPE, encoding="utf-8" if WINDOWS else None, timeout=10)
 
 
 def tmux(*args):
-    result = run(["tmux", *args])
+    if WINDOWS and args and args[0] == "show-option":
+        args = ("show-options", *args[1:])
+    # Released PSMux 3.3.8 accepts user options, but does not isolate them by
+    # window. Keep the helper's window metadata separately on this platform.
+    if WINDOWS and args and args[0] in ("set-option", "show-options"):
+        flags = "".join(arg[1:] for arg in args[1:] if isinstance(arg, str) and arg.startswith("-") and arg != "-t")
+        if "w" in flags and "-t" in args:
+            target_index = args.index("-t")
+            target = args[target_index + 1]
+            remaining = args[target_index + 2:]
+            if remaining and remaining[0].startswith("@"):
+                key = remaining[0]
+                if args[0] == "show-options":
+                    return native_metadata().get(target, {}).get(key, "")
+                with locked("metadata"):
+                    metadata = native_metadata()
+                    values = metadata.setdefault(target, {})
+                    if "u" in flags:
+                        values.pop(key, None)
+                    else:
+                        values[key] = remaining[1]
+                    atomic_json(native_metadata_path(), metadata)
+                return ""
+    # Without TMUX, PSMux routes bare pane/window IDs to the latest session.
+    # Keep every command launched by a popup on its originating session.
+    if WINDOWS and NATIVE_POPUP_SESSION:
+        args = list(args)
+        if "-t" in args:
+            index = args.index("-t") + 1
+            if str(args[index]).startswith("%"):
+                args[index] = NATIVE_POPUP_SESSION + ":." + str(args[index])
+            elif str(args[index]).startswith(("@", ":", ".")):
+                args[index] = NATIVE_POPUP_SESSION + ":" + str(args[index]).lstrip(":")
+        else:
+            args += ["-t", NATIVE_POPUP_SESSION + ":"]
+    result = run([MUX, *MUX_ARGS, *args])
     if result.returncode:
         raise RuntimeError(result.stderr.strip() or "tmux command failed")
     return result.stdout.strip()
@@ -83,18 +127,32 @@ def list_checkouts(base):
 
 def panes():
     keys = ["session_id", "session_name", "window_id", "window_index", "window_name",
-            "pane_id", "pane_index", "pane_current_path", "pane_current_command", "pane_pid",
+            "pane_id", "pane_index", "pane_current_path", "pane_current_command", "pane_pid", "pane_title",
             "@repo-view", "@repo-path", "@checkout-label"]
     output = tmux("list-panes", "-a", "-F", SEP.join("#{" + k + "}" for k in keys))
-    return [dict(zip(keys, line.split(SEP))) for line in output.splitlines() if line]
+    rows = [dict(zip(keys, line.split(SEP))) for line in output.splitlines() if line]
+    if WINDOWS:
+        metadata = native_metadata()
+        for row in rows:
+            for key in ("@repo-view", "@repo-path", "@checkout-label"):
+                row[key] = metadata.get(row["window_id"], {}).get(key, "")
+    return rows
 
 
 def caller(pane=None):
+    global NATIVE_POPUP_SESSION
     target = pane or os.environ.get("TMUX_PANE")
-    if not os.environ.get("TMUX") and not target:
+    # PSMux popups are outside the window's pane tree. They provide the
+    # originating session, but neither TMUX nor TMUX_PANE (unlike tmux popups).
+    popup_session = os.environ.get("PSMUX_SESSION") if WINDOWS else None
+    if not os.environ.get("TMUX") and not target and not popup_session:
         raise RuntimeError("Run this helper inside tmux")
-    value = tmux("display-message", "-p", *(["-t", target] if target else []), "#{pane_id}")
-    pane = next((p for p in panes() if p["pane_id"] == value), None)
+    if popup_session and not target and not os.environ.get("TMUX"):
+        NATIVE_POPUP_SESSION = popup_session
+    target = target or (popup_session + ":" if popup_session else None)
+    value = tmux("display-message", "-p", *(["-t", target] if target else []), "#{session_id}" + SEP + "#{pane_id}")
+    session_id, pane_id = value.split(SEP, 1)
+    pane = next((p for p in panes() if p["session_id"] == session_id and p["pane_id"] == pane_id), None)
     if pane is None:
         raise RuntimeError("The calling tmux pane is no longer open")
     return pane
@@ -103,15 +161,53 @@ def caller(pane=None):
 @contextmanager
 def locked(name, blocking=True):
     STATE.mkdir(parents=True, mode=0o700, exist_ok=True)
-    server = tmux("display-message", "-p", "#{socket_path}:#{pid}")
+    server = server_identity()
     token = hashlib.sha256((server + name).encode()).hexdigest()[:24]
-    with (STATE / (token + ".lock")).open("a") as stream:
+    with (STATE / (token + ".lock")).open("a+b") as stream:
         try:
-            fcntl.flock(stream, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+            if WINDOWS:
+                stream.seek(0, os.SEEK_END)
+                if not stream.tell():
+                    stream.write(b"\0")
+                    stream.flush()
+                while True:
+                    stream.seek(0)
+                    try:
+                        msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                        break
+                    except OSError:
+                        if not blocking:
+                            yield False
+                            return
+                        time.sleep(0.1)
+            else:
+                fcntl.flock(stream, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
         except BlockingIOError:
             yield False
             return
-        yield True
+        try:
+            yield True
+        finally:
+            if WINDOWS:
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+
+
+def server_identity():
+    # PSMux has a server per session; its namespace identity is shared and stable.
+    return tmux("display-message", "-p", "#{server_instance}" if WINDOWS else "#{socket_path}:#{pid}")
+
+
+def native_metadata_path():
+    token = hashlib.sha256(server_identity().encode()).hexdigest()[:24]
+    return STATE / ("windows-" + token + ".json")
+
+
+def native_metadata():
+    try:
+        return json.loads(native_metadata_path().read_text())
+    except FileNotFoundError:
+        return {}
 
 
 def view_kind(pane):
@@ -131,7 +227,7 @@ def sidebar_windows():
         state["panes"].append(pane)
         # ccmux delays startup in background windows, so the title alone is
         # insufficient immediately after its split-window command returns.
-        if title == "ccmux-sidebar" or re.search(r'''(?:^|[/\s"'])ccmux\s+sidebar(?:[\s"']|$)''', command):
+        if title in ("ccmux-sidebar", "dotfiles-agent-sidebar") or re.search(r'''(?:^|[/\s"'])ccmux\s+sidebar(?:[\s"']|$)''', command) or "native-agents.py" in command:
             state["sidebar"] = True
     return windows
 
@@ -153,8 +249,66 @@ def restore_sidebar_layouts(target=None):
         # select-layout can move pane contents when IDs no longer match. Keep
         # the current layout if working panes were added or removed meanwhile.
         if set(original["panes"]) == set(state["panes"]):
-            tmux("select-layout", "-t", window, original["layout"])
+            layout = native_layout(original["layout"]) if WINDOWS else original["layout"]
+            tmux("select-layout", "-t", window, layout)
         tmux("set-option", "-wu", "-t", window, "@dotfiles-sidebar-layout")
+
+
+def native_layout(layout):
+    """Encode PSMux's integer split percentages, avoiding its cell-to-percent floor."""
+    body, position = layout.split(",", 1)[1], 0
+
+    def parse():
+        nonlocal position
+        match = re.match(r"(\d+)x(\d+),(\d+),(\d+)", body[position:])
+        if not match:
+            raise RuntimeError("Invalid saved PSMux layout")
+        dimensions = list(map(int, match.groups()))
+        position += match.end()
+        node = {"dimensions": dimensions}
+        if position < len(body) and body[position] in "{[":
+            opening = body[position]
+            closing = "}" if opening == "{" else "]"
+            position += 1
+            children = [parse()]
+            while body[position] == ",":
+                position += 1
+                children.append(parse())
+            if body[position] != closing:
+                raise RuntimeError("Invalid saved PSMux split")
+            position += 1
+            node.update(opening=opening, children=children)
+        else:
+            match = re.match(r",(\d+)", body[position:])
+            if not match:
+                raise RuntimeError("Invalid saved PSMux pane")
+            node["pane"] = match.group(1)
+            position += match.end()
+        return node
+
+    root = parse()
+    if position != len(body):
+        raise RuntimeError("Trailing data in saved PSMux layout")
+
+    def encode(node, override=None):
+        dimensions = node["dimensions"].copy()
+        if override:
+            dimensions[override[0]] = override[1]
+        prefix = f"{dimensions[0]}x{dimensions[1]},{dimensions[2]},{dimensions[3]}"
+        if "pane" in node:
+            return prefix + "," + node["pane"]
+        axis = 0 if node["opening"] == "{" else 1
+        children = node["children"]
+        total = sum(child["dimensions"][axis] for child in children)
+        weights = [(child["dimensions"][axis] * 100 + total - 1) // total for child in children[:-1]]
+        weights.append(max(0, 100 - sum(weights)))
+        return prefix + node["opening"] + ",".join(encode(child, (axis, weight)) for child, weight in zip(children, weights)) + ("}" if axis == 0 else "]")
+
+    encoded = encode(root)
+    checksum = 0
+    for byte in encoded.encode():
+        checksum = (((checksum >> 1) | ((checksum & 1) << 15)) + byte) & 0xffff
+    return f"{checksum:04x}," + encoded
 
 
 def toggle_sidebar():
@@ -194,12 +348,38 @@ def send(pane, command):
 
 
 def helper_command(*args):
-    return shlex.join(["python3", str(SCRIPT), *map(str, args)])
+    return shell_command([sys.executable if WINDOWS else "python3", str(SCRIPT), *map(str, args)])
+
+
+def shell_command(argv):
+    if WINDOWS:
+        return "& " + " ".join("'" + str(arg).replace("'", "''") + "'" for arg in argv)
+    return shlex.join(list(map(str, argv)))
 
 
 def available(command):
-    words = shlex.split(command)
-    return words and shutil.which(words[0])
+    words = shlex.split(command, posix=not WINDOWS)
+    if WINDOWS and words and words[0] == "&":
+        words = words[1:]
+    return words and shutil.which(words[0].strip("'\"") if WINDOWS else words[0])
+
+
+def native_start_command(command, directory):
+    if not WINDOWS or command == "none":
+        return []
+    # Run after PowerShell's profiles initialize, rather than injecting keys
+    # into a shell that may still be starting or moving a warm pane's cwd.
+    # Resolve tools inside that shell: profiles can add paths/functions that
+    # the popup's Python process cannot see.
+    shell = shutil.which("pwsh") or "pwsh.exe"
+    if "\\windowsapps\\" in shell.lower() and "\\microsoft\\windowsapps\\" not in shell.lower():
+        alias = Path(os.environ["LOCALAPPDATA"]) / "Microsoft/WindowsApps/pwsh.exe"
+        if os.path.lexists(alias):
+            shell = str(alias)
+    directory = str(directory).replace("'", "''")
+    script = f"Set-Location -LiteralPath '{directory}'; {command}"
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode("ascii")
+    return [subprocess.list2cmdline([shell, "-NoLogo", "-NoExit", "-EncodedCommand", encoded])]
 
 
 def ensure_view(session, directory, kind, focus=True):
@@ -213,33 +393,40 @@ def ensure_view(session, directory, kind, focus=True):
             if focus:
                 tmux("select-window", "-t", pane["window_id"])
             return pane["window_id"], pane["pane_id"], False
-    root = tmux("new-window", "-d", "-P", "-F", "#{pane_id}", "-t", session + ":",
-                "-n", Path(directory).name + ":" + kind, "-c", directory)
+    editor = assistant = monitor = "none"
+    if kind == "dev":
+        editor = option("@dev-editor-command") or "nvim"
+        assistant = option("@dev-assistant-command") or "codex resume --last || codex"
+    elif kind == "monitor":
+        monitor = option("@monitor-command") or (helper_command("monitor-loop") if WINDOWS else "htop" if shutil.which("htop") else "top")
+    root_command = editor if kind == "dev" else monitor
+    root = tmux("new-window", "-d", "-P", "-F", "#{pane_id}", "-t", session_target(session) + ":",
+                "-n", Path(directory).name + ":" + kind, "-c", directory,
+                *native_start_command(root_command, directory))
     window = tmux("display-message", "-p", "-t", root, "#{window_id}")
     try:
         stamp(window, directory, kind)
         if kind == "dev":
             middle = tmux("split-window", "-d", "-h", "-P", "-F", "#{pane_id}", "-t", root, "-c", directory)
-            right = tmux("split-window", "-d", "-h", "-P", "-F", "#{pane_id}", "-t", middle, "-c", directory)
+            right = tmux("split-window", "-d", "-h", "-P", "-F", "#{pane_id}", "-t", middle, "-c", directory,
+                         *native_start_command(assistant, directory))
             tmux("select-layout", "-t", window, "even-horizontal")
-            commands = [(root, option("@dev-editor-command") or "nvim"),
-                        (right, option("@dev-assistant-command") or "codex resume --last || codex")]
+            commands = [] if WINDOWS else [(root, editor), (right, assistant)]
             for pane, command in commands:
                 if command != "none" and available(command):
                     send(pane, command)
                 elif command != "none":
                     tmux("display-message", "Optional command not found: " + shlex.split(command)[0])
             for pane, role in ((root, "editor"), (middle, "shell"), (right, "agent")):
-                tmux("set-option", "-pq", "-t", pane, "@pane-role", role)
+                set_pane_role(pane, role)
             tmux("select-pane", "-t", root)
         elif kind == "monitor":
-            command = option("@monitor-command") or ("htop" if shutil.which("htop") else "top")
-            if available(command):
-                send(root, command)
+            if not WINDOWS and monitor != "none" and available(monitor):
+                send(root, monitor)
         elif kind == "logs":
-            tmux("set-option", "-pq", "-t", root, "@pane-role", "ralphex log")
+            set_pane_role(root, "ralphex log")
         elif kind == "tests":
-            tmux("set-option", "-pq", "-t", root, "@pane-role", "tests")
+            set_pane_role(root, "tests")
         if focus:
             tmux("select-window", "-t", window)
         return window, root, True
@@ -248,7 +435,34 @@ def ensure_view(session, directory, kind, focus=True):
         raise
 
 
+def session_target(session):
+    if WINDOWS:
+        # PSMux 3.3.8 double-prefixes -L namespaces when resolving $N targets.
+        # Session names resolve correctly in both default and named namespaces.
+        for row in tmux("list-sessions", "-F", "#{session_id}" + SEP + "#{session_name}").splitlines():
+            identity, name = row.split(SEP, 1)
+            if identity == session:
+                return name
+    return session
+
+
+def set_pane_role(pane, role):
+    # PSMux 3.3.8 supports pane titles but only built-in pane-scoped options.
+    if WINDOWS:
+        tmux("select-pane", "-t", pane, "-T", role)
+    else:
+        tmux("set-option", "-pq", "-t", pane, "@pane-role", role)
+
+
 def processes():
+    if WINDOWS:
+        command = "@(Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,CreationDate,CommandLine) | ConvertTo-Json -Compress"
+        result = run(["pwsh", "-NoLogo", "-NoProfile", "-Command", command])
+        if result.returncode:
+            raise RuntimeError(result.stderr.strip() or "Cannot query Windows processes")
+        return {int(p["ProcessId"]): {"parent": int(p["ParentProcessId"]), "started": p["CreationDate"],
+                                    "name": p["Name"].removesuffix(".exe"), "command": p.get("CommandLine") or ""}
+                for p in json.loads(result.stdout or "[]")}
     rows = {}
     for line in run(["ps", "-axo", "pid=,ppid=,lstart=,comm="]).stdout.splitlines():
         fields = line.strip().split(None, 7)
@@ -305,6 +519,18 @@ def select_log(files, worktree):
 
 
 def discover():
+    if WINDOWS:
+        # Windows has no lsof. Explicitly registered logs are shared by the watcher.
+        jobs = {}
+        namespace = server_identity()
+        for path in STATE.glob("log-*.json"):
+            try:
+                job = json.loads(path.read_text())
+                if job.get("namespace") == namespace and Path(job["log"]).is_file():
+                    jobs[job["worktree"]] = job
+            except (OSError, ValueError, KeyError):
+                continue
+        return jobs
     jobs, rows = {}, processes()
     for pid, process in rows.items():
         if process["name"] != "ralphex":
@@ -323,7 +549,7 @@ def discover():
 
 
 def log_state(directory):
-    server = tmux("display-message", "-p", "#{socket_path}")
+    server = server_identity() if WINDOWS else tmux("display-message", "-p", "#{socket_path}")
     # Share the same checkout stream across sessions. Session IDs change after
     # Resurrect; a restored viewer must keep following the same state file.
     token = hashlib.sha256((server + directory).encode()).hexdigest()[:24]
@@ -351,12 +577,12 @@ def sync_log(session, directory, job=None, focus=False):
         atomic_json(state, job)
     window, pane, fresh = ensure_view(session, directory, "logs", focus)
     identity = (job or {}).get("identity", "waiting")
-    previous = tmux("show-option", "-pqv", "-t", pane, "@log-job")
+    previous = tmux("show-option", "-wqv" if WINDOWS else "-pqv", "-t", window if WINDOWS else pane, "@log-job")
     command = tmux("display-message", "-p", "-t", pane, "#{pane_current_command}")
     # A stopped viewer stays stopped for this run; never interrupt another tool.
-    if fresh or ((focus or (previous and previous != identity)) and command in ("bash", "zsh", "sh", "fish")):
+    if fresh or ((focus or (previous and previous != identity)) and command in ("bash", "zsh", "sh", "fish", "pwsh", "powershell", "pwsh.exe", "powershell.exe")):
         send(pane, helper_command("follow", state))
-    tmux("set-option", "-pq", "-t", pane, "@log-job", identity)
+    tmux("set-option", "-wq" if WINDOWS else "-pq", "-t", window if WINDOWS else pane, "@log-job", identity)
     return window
 
 
@@ -407,21 +633,25 @@ def refresh():
                 stamp(window, directory, kind, pane)
 
 
-def watch():
+def watch(on_refresh=None):
     with locked("watch", blocking=False) as acquired:
         if not acquired:
             return
-        server = tmux("display-message", "-p", "#{socket_path}:#{pid}")
+        server = server_identity()
         seen = {}
         while True:
             try:
-                if tmux("display-message", "-p", "#{socket_path}:#{pid}") != server:
+                if WINDOWS:
+                    sessions = run([MUX, *MUX_ARGS, "list-sessions"])
+                    if sessions.returncode or not sessions.stdout.strip():
+                        return
+                if server_identity() != server:
                     return
                 with locked("layout"):
                     refresh()
                     open_repos = {(p["session_id"], repo_key(view_path(p))) for p in panes()
                                   if view_kind(p) in ("dev", "tests", "logs")}
-                    jobs = discover() if shutil.which("lsof") else {}
+                    jobs = discover() if WINDOWS or shutil.which("lsof") else {}
                     for directory, job in jobs.items():
                         for session, key in open_repos:
                             if key and key == repo_key(directory):
@@ -431,10 +661,12 @@ def watch():
                                 if existing or seen.get(view) != job["identity"]:
                                     sync_log(session, directory, job)
                                 seen[view] = job["identity"]
+                if on_refresh:
+                    on_refresh()
                 time.sleep(5)
             except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
                 # An empty server during startup is normal; a dead server exits.
-                if run(["tmux", "list-sessions"]).returncode:
+                if run([MUX, *MUX_ARGS, "list-sessions"]).returncode:
                     return
                 print(str(exc), file=sys.stderr)
                 time.sleep(5)
@@ -475,15 +707,28 @@ def save_layout(path, agents=None):
     Path(path).write_text("\n".join(lines) + "\n")
 
 
+def monitor_loop():
+    try:
+        while True:
+            result = run(["pwsh", "-NoProfile", "-Command", "Get-Process | Sort-Object CPU -Descending | Select-Object -First 20 Id,ProcessName,CPU,WorkingSet | Format-Table -AutoSize | Out-String -Width 100"])
+            print("\033[H\033[2J" + result.stdout, flush=True)
+            time.sleep(2)
+    except KeyboardInterrupt:
+        pass
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=["list", "dev", "tests", "logs", "monitor", "watch", "follow", "save", "refresh",
-                                          "sidebar", "sidebar-save", "sidebar-restore"])
+                                          "sidebar", "sidebar-save", "sidebar-restore", "monitor-loop"])
     parser.add_argument("argument", nargs="?")
+    parser.add_argument("--log", help="Register an explicit log for this checkout (native Windows)")
     args = parser.parse_args()
     if args.action == "list":
         for path, title in list_checkouts(args.argument or str(Path.home() / "repos")):
             print(path + "\t" + title)
+    elif args.action == "monitor-loop":
+        monitor_loop()
     elif args.action == "follow":
         follow(args.argument)
     elif args.action == "watch":
@@ -496,7 +741,7 @@ def main():
         with locked("sidebar"):
             if args.action == "sidebar-save":
                 # Only ccmux's auto-open hook needs a pre-split snapshot.
-                if "ccmux sidebar" in tmux("show-hooks", "-g", "after-new-window"):
+                if WINDOWS or "ccmux sidebar" in tmux("show-hooks", "-g", "after-new-window"):
                     save_sidebar_layouts(args.argument)
             else:
                 restore_sidebar_layouts(args.argument)
@@ -510,7 +755,15 @@ def main():
                 if args.action == "monitor":
                     directory = str(Path.home())
                 if args.action == "logs":
-                    sync_log(pane["session_id"], directory, discover().get(directory), focus=True)
+                    job = discover().get(directory)
+                    if args.log:
+                        log = Path(args.log).resolve()
+                        if not log.is_file():
+                            raise RuntimeError("Log file does not exist: " + str(log))
+                        job = {"worktree": directory, "log": str(log), "identity": str(time.time_ns())}
+                        if WINDOWS:
+                            job["namespace"] = server_identity()
+                    sync_log(pane["session_id"], directory, job, focus=True)
                 else:
                     ensure_view(pane["session_id"], directory, args.action)
 

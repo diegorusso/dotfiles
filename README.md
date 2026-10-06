@@ -42,7 +42,8 @@ check.sh                     local static and isolated integration validation
 Windows uses PowerShell 7, Windows Terminal, and WinGet. Git, the Catppuccin
 Starship prompt, and the complete Neovim configuration share the repository
 sources used by Linux and macOS. Windows has its own shell functions and package
-profiles. Terminal panes provide the native split-window workflow.
+profiles. PSMux provides native sessions and the repository/worktree workflow
+inside Windows Terminal.
 
 Clone this repository using Git for Windows, then open PowerShell in the checkout.
 The package helper also works in the built-in Windows PowerShell 5.1, allowing
@@ -63,7 +64,15 @@ adds that directory to `PATH`. Zig supplies a native C compiler for Neovim
 parsers; the shell sets `CC=zig cc` and `CXX=zig c++` when these values are unset.
 Unversioned WinGet packages use `--no-upgrade`; Neovim explicitly
 selects **0.12.5** to satisfy this repository's **0.12.x** requirement. An older
-Neovim is upgraded by this step.
+Neovim is upgraded by this step. PSMux explicitly selects **3.3.8**; older
+versions lack the command-format support needed by the workspace bindings.
+Before upgrading PSMux, the helper checks for running processes from its WinGet
+installation. Save your pane work and run `tmux kill-server` from a separate
+PowerShell terminal if it asks you to stop PSMux, then retry. Detaching leaves
+the servers running, and a hidden standby server can also lock `tmux.exe`.
+The helper also provisions Python **3.13** through uv, without changing the
+system's Python registration or adding executable links. Workspace launches
+use that runtime offline, without project environments or Python dependencies.
 Package installation may request elevation through its individual installers.
 
 Optional application profiles add to the core tools:
@@ -95,6 +104,9 @@ Bootstrap installs:
 | Shared Starship prompt | `~/.config/starship.toml` |
 | PowerShell entrypoint | `$PROFILE.CurrentUserAllHosts` |
 | Native shell layer | `~/.config/dotfiles/windows/interactive.ps1` |
+| Native PSMux configuration | `~/.psmux.conf` |
+| Shared workspace helper | `~/.tmux/layouts/workspace.py` |
+| PowerShell workspace entrypoint and agent navigation | `~/.config/dotfiles/windows/workspace/` |
 | Shared Neovim configuration | `%LOCALAPPDATA%\nvim` |
 | Terminal profile and colours | `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\dotfiles\terminal.json` |
 
@@ -160,6 +172,72 @@ It checks syntax and JSON, offline previews, installation and repeated applies,
 restore and its undo, local override preservation, redirected profile paths,
 custom editor namespaces, junction rejection, and package selection/failures.
 The checks use temporary folders and command doubles for package installers.
+
+### Windows workspaces
+
+After applying packages and dotfiles, open a new PowerShell 7 terminal and run
+`psmux new-session -s dev` (or `psmux attach -t dev` to return to that session).
+For an already running session, load the installed configuration with
+`psmux -t 'dev:' source-file "$HOME/.psmux.conf"`, replacing `dev` with its name.
+In existing PowerShell panes, run `. $PROFILE.CurrentUserAllHosts` to load the
+updated shell functions; new panes load them automatically.
+PSMux loads `~/.psmux.conf`; use **Ctrl+B**, then:
+
+| Key | Action |
+| --- | --- |
+| `R` | Pick a repository or registered Git worktree; reuse its Neovim / shell / Codex window |
+| `T` | Open/reuse the checkout's test shell, without running tests automatically |
+| `M` | Open/reuse a native process monitor |
+| `L` | Open/reuse the checkout's registered log viewer |
+| `A` | Pick a running agent, preview its pane, and jump to it |
+| `B` | Toggle the native agent sidebar, preserving the previous pane layout |
+| `P` / `S` | Open the optional checkouts configured below |
+| `r` | Reload `~/.psmux.conf` |
+
+The shared helper refreshes checkout/branch labels and keeps each worktree's
+development, test and log windows separate. From a PSMux PowerShell pane,
+`tdev` opens the current checkout, and `tdev 'C:\repos\project'` opens another.
+The picker uses `WORKSPACE_ROOT` or `~/repos`; `@repo-root` overrides it.
+New development windows start Neovim and Codex after PowerShell loads its
+profiles, in the selected checkout. Codex uses `codex resume --last || codex`.
+Existing windows are reused without restarting their tools; in an existing
+blank agent pane, run that command once. Set `@dev-editor-command` or
+`@dev-assistant-command` to a PowerShell command to customize startup (`none`
+disables it).
+Optional per-machine settings belong in `~/.config/extra.ps1`:
+
+```powershell
+$env:WORKSPACE_ROOT = Join-Path $HOME 'repos'
+$env:DOTFILES_DEVICE = 'work-windows'
+$env:DOTFILES_COLOUR = 'blue' # green, blue, purple, or orange
+$env:DOTFILES_TMUX_P_REPO = Join-Path $HOME 'repos/project-one'
+$env:DOTFILES_TMUX_S_REPO = Join-Path $HOME 'repos/project-two'
+```
+
+Register a log file with `tlogs 'C:\repos\project\runner.log'` from its checkout
+pane. The viewer follows appends and rotation; `L` returns to it, and Ctrl+C
+returns to its shell. Windows uses explicit registration because Unix's
+Ralphex discovery depends on `lsof`. Register the next run's file again if it
+changes. Logs remain scoped to the checkout and PSMux server.
+
+The native agent picker/sidebar detects Codex, Claude, OpenCode, Gemini,
+Copilot and aider processes descended from PSMux panes. It reports **running**;
+ccmux's hook-derived busy/approval state and conversation-aware Resurrect
+integration remain specific to the Unix setup. In the sidebar, `j`/`k` select,
+Enter jumps, and `q` closes that sidebar. Closing with `B`, `q`, or pane-close
+restores the saved pane sizes when the working panes are unchanged. New windows
+also receive sidebars while enabled. Detach with Ctrl+B then `d` to keep live
+processes running; no Windows save/restore plugin is installed.
+
+Run the real native workspace checks after provisioning:
+
+```powershell
+uv run --offline --no-project --python 3.13 -m unittest discover -s tests/tmux -p test_native_windows.py -v
+```
+
+These use temporary repositories and a unique PSMux namespace, without starting
+agents or modifying live sessions. Set `PSMUX_TEST_EXE` to a portable PSMux
+executable to test a newer build without upgrading your installed copy.
 
 ## Install or update Linux and macOS dotfiles
 
@@ -466,10 +544,11 @@ Bootstrap copies files; it does not keep them linked or synchronize edits back.
 
 ## tmux
 
-The configuration targets tmux 3.2 or newer on macOS and Linux, with Python
+The Unix configuration targets tmux 3.2 or newer on macOS and Linux, with Python
 3.9+, Git and fzf. Keep using the existing session and pane shortcuts; each
 checkout has reusable `dev`, `logs` and `tests` windows. The development layout
-is still Neovim / shell / Codex in three equal columns.
+is still Neovim / shell / Codex in three equal columns. Native Windows uses
+PSMux and the [Windows workspace entrypoints](#windows-workspaces).
 
 | Shortcut (after Ctrl+B) | Action |
 | --- | --- |

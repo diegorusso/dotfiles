@@ -2,6 +2,7 @@
     "core": [
         { "id": "Microsoft.PowerShell" },
         { "id": "Microsoft.WindowsTerminal" },
+        { "id": "marlocarlo.psmux", "version": "3.3.8" },
         { "id": "Git.Git" },
         { "id": "GitHub.GitLFS" },
         { "id": "Starship.Starship" },

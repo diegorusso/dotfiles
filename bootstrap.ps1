@@ -163,6 +163,9 @@ $targets = [ordered]@{
     starship = @{ Source = Join-Path $PSScriptRoot '.config/starship.toml'; Destination = Join-Path $UserHome '.config/starship.toml' }
     profile = @{ Source = Join-Path $PSScriptRoot 'windows/profile.ps1'; Destination = $ProfilePath }
     powershell = @{ Source = Join-Path $PSScriptRoot 'windows/interactive.ps1'; Destination = Join-Path $UserHome '.config/dotfiles/windows/interactive.ps1' }
+    workspace = @{ Source = Join-Path $PSScriptRoot 'windows/workspace'; Destination = Join-Path $UserHome '.config/dotfiles/windows/workspace' }
+    tmuxhelper = @{ Source = Join-Path $PSScriptRoot '.tmux/layouts/workspace.py'; Destination = Join-Path $UserHome '.tmux/layouts/workspace.py' }
+    psmux = @{ Source = Join-Path $PSScriptRoot 'windows/psmux.conf'; Destination = Join-Path $UserHome '.psmux.conf' }
     terminal = @{ Source = Join-Path $PSScriptRoot 'windows/terminal.json'; Destination = Join-Path $LocalAppData 'Microsoft/Windows Terminal/Fragments/dotfiles/terminal.json' }
     nvim = @{ Source = Join-Path $PSScriptRoot '.config/nvim'; Destination = Join-Path $LocalAppData 'nvim' }
 }

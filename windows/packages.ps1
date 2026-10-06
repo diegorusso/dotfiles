@@ -20,7 +20,7 @@ $packages = @($manifest.core)
 if ($Profile -ne 'Core') { $packages += @($manifest.($Profile.ToLowerInvariant())) }
 foreach ($package in $packages) {
     if ($package.id -notmatch '^[A-Za-z0-9][A-Za-z0-9.+_-]*$' -or
-        ($package.PSObject.Properties['version'] -and $package.version -notmatch '^0\.12\.[0-9]+$')) {
+        ($package.PSObject.Properties['version'] -and $package.version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$')) {
         throw 'Invalid Windows package manifest entry.'
     }
 }
@@ -36,6 +36,7 @@ foreach ($package in $packages) {
     Write-Output ('winget ' + ($installArguments -join ' '))
 }
 & (Join-Path $PSScriptRoot 'tree-sitter.ps1')
+Write-Output 'uv python install --no-bin --no-registry 3.13'
 if (-not $Apply) {
     Write-Output 'Preview only. Re-run with -Apply to install packages.'
     return
@@ -43,6 +44,9 @@ if (-not $Apply) {
 if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     throw 'WinGet is required. Install or update Microsoft App Installer, then retry.'
 }
+. (Join-Path $PSScriptRoot 'psmux-package.ps1')
+$muxPackage = $packages | Where-Object id -eq 'marlocarlo.psmux'
+if ($muxPackage) { Assert-PsmuxPackageUnlocked -RequiredVersion $muxPackage.version }
 
 # WinGet uses nonzero HRESULTs for successful no-change outcomes.
 $wingetNoChangeExitCodes = @(
@@ -62,6 +66,9 @@ foreach ($package in $packages) {
     if ($installExitCode -in $wingetNoChangeExitCodes) {
         Write-Output "UNCHANGED $($package.id)"
     } elseif ($installExitCode -ne 0) {
+        if ($package.id -eq 'marlocarlo.psmux') {
+            throw "WinGet failed for $($package.id) (exit $installExitCode). If an executable is in use, save your pane work and run 'tmux kill-server' from a separate PowerShell terminal, then retry."
+        }
         throw "WinGet failed for $($package.id) (exit $installExitCode)."
     }
 }
@@ -73,6 +80,14 @@ foreach ($scope in @('Machine', 'User')) {
     }
 }
 & (Join-Path $PSScriptRoot 'tree-sitter.ps1') -Apply
+& uv python install --no-bin --no-registry 3.13
+if ($LASTEXITCODE -ne 0) { throw "Python runtime installation failed (exit $LASTEXITCODE)." }
+if (Get-Command psmux -ErrorAction SilentlyContinue) {
+    $muxVersion = & psmux --version
+    if ($LASTEXITCODE -ne 0 -or ($muxVersion -join "`n") -notmatch 'psmux ([0-9]+\.[0-9]+\.[0-9]+)' -or [version]$Matches[1] -lt [version]'3.3.8') {
+        throw 'PSMux 3.3.8 or newer is required. Check which psmux is first on PATH.'
+    }
+}
 
 if (Get-Command nvim -ErrorAction SilentlyContinue) {
     $version = @(& nvim --version)[0]

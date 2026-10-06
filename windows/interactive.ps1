@@ -53,6 +53,16 @@ function repos {
     if ($selected) { Set-Location -LiteralPath $selected }
 }
 
+function tdev {
+    param([string]$Path = (Get-Location).Path)
+    & (Join-Path $HOME '.config/dotfiles/windows/workspace/workspace.ps1') dev $Path
+}
+
+function tlogs {
+    param([string]$Log)
+    & (Join-Path $HOME '.config/dotfiles/windows/workspace/workspace.ps1') logs -Log $Log
+}
+
 # PSReadLine is loaded by interactive console hosts, including Windows Terminal.
 # Prompt and line editor setup is limited to hosts with PSReadLine loaded.
 if (Get-Module PSReadLine) {

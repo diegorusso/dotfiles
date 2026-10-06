@@ -11,7 +11,7 @@ function Assert([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
 }
 
-foreach ($file in @(Join-Path $repo 'bootstrap.ps1') + @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1' | Select-Object -ExpandProperty FullName)) {
+foreach ($file in @(Join-Path $repo 'bootstrap.ps1') + @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.ps1' -Recurse | Select-Object -ExpandProperty FullName)) {
     $tokens = $null
     $errors = $null
     [Management.Automation.Language.Parser]::ParseFile($file, [ref]$tokens, [ref]$errors) | Out-Null
@@ -55,6 +55,9 @@ try {
     $backup = $backups[0].FullName
     Assert ([IO.File]::ReadAllText((Join-Path $user '.gitconfig')) -eq [IO.File]::ReadAllText((Join-Path $repo '.gitconfig'))) 'Git config was not installed.'
     Assert (Test-Path -LiteralPath (Join-Path $appData 'nvim/init.lua')) 'Neovim configuration missing.'
+    Assert (Test-Path -LiteralPath (Join-Path $user '.psmux.conf')) 'Native multiplexer configuration missing.'
+    Assert (Test-Path -LiteralPath (Join-Path $user '.tmux/layouts/workspace.py')) 'Shared workspace helper missing.'
+    Assert (Test-Path -LiteralPath (Join-Path $user '.config/dotfiles/windows/workspace/native-agents.py')) 'Native agent helper missing.'
     Assert (Test-Path -LiteralPath (Join-Path $appData 'Microsoft/Windows Terminal/Fragments/dotfiles/terminal.json')) 'Terminal fragment missing.'
     Assert ([IO.File]::ReadAllText((Join-Path $user '.config/extra')) -eq 'local bash override') 'Bash override changed.'
     Assert ([IO.File]::ReadAllText((Join-Path $user '.config/extra.ps1')) -eq '$env:DOTFILES_TEST_EXTRA = "local"') 'PowerShell override changed.'
@@ -116,6 +119,14 @@ try {
         $global:LASTEXITCODE = 0
         'NVIM v0.12.5'
     }
+    function global:uv {
+        $global:DotfilesPackageCalls.Add('uv ' + ($args -join ' '))
+        $global:LASTEXITCODE = 0
+    }
+    function global:psmux {
+        $global:LASTEXITCODE = 0
+        'psmux 3.3.8'
+    }
     $helper = Join-Path $PSScriptRoot 'packages.ps1'
     & $helper -Profile Work | Out-Null
     Assert ($global:DotfilesPackageCalls.Count -eq 0) 'Package preview invoked an installer.'
@@ -123,7 +134,49 @@ try {
     Assert (@($global:DotfilesPackageCalls | Where-Object { $_ -like '*AgileBits.1Password*' }).Count -eq 1) 'Work profile omitted its applications.'
     Assert (@($global:DotfilesPackageCalls | Where-Object { $_ -like '*VideoLAN.VLC*' }).Count -eq 0) 'Work profile selected personal applications.'
     Assert (@($global:DotfilesPackageCalls | Where-Object { $_ -like '*Neovim.Neovim*--version 0.12.*' }).Count -eq 1) 'Neovim version was not selected explicitly.'
+    Assert (@($global:DotfilesPackageCalls | Where-Object { $_ -like '*marlocarlo.psmux*--version 3.3.8*' }).Count -eq 1) 'PSMux version was not selected explicitly.'
+    Assert (@($global:DotfilesPackageCalls | Where-Object { $_ -eq 'uv python install --no-bin --no-registry 3.13' }).Count -eq 1) 'Workspace Python runtime was not provisioned.'
     Assert (@($global:DotfilesPackageCalls | Where-Object { $_ -like 'tree-sitter --version' }).Count -eq 1) 'Existing standalone CLI was not detected.'
+
+    $previousLocalAppData = $env:LOCALAPPDATA
+    try {
+        $env:LOCALAPPDATA = Join-Path $scratch 'package preflight'
+        $muxDirectory = Join-Path $env:LOCALAPPDATA 'Microsoft/WinGet/Packages/marlocarlo.psmux_Microsoft.Winget.Source_8wekyb3d8bbwe'
+        $global:DotfilesMuxProcessCalls = 0
+        $global:DotfilesMuxProcesses = @(
+            [pscustomobject]@{ Id = 101; Path = (Join-Path $muxDirectory 'tmux.exe') },
+            [pscustomobject]@{ Id = 102; Path = (Join-Path $muxDirectory 'psmux.exe') },
+            [pscustomobject]@{ Id = 103; Path = (Join-Path $muxDirectory 'pmux.exe') }
+        )
+        function Get-Process {
+            $global:DotfilesMuxProcessCalls++
+            $global:DotfilesMuxProcesses
+        }
+        $global:DotfilesPackageCalls.Clear()
+        & $helper | Out-Null
+        Assert ($global:DotfilesMuxProcessCalls -eq 0) 'Preview inspected live multiplexer processes.'
+        $failure = $null
+        try { & $helper -Apply | Out-Null } catch { $failure = $_.Exception.Message }
+        Assert ($failure -like '*PSMux upgrade*blocked*PID 101, 102, 103*tmux kill-server*') "Locked or partially removed PSMux did not give recovery instructions: $failure"
+        Assert ($global:DotfilesPackageCalls.Count -eq 0) 'An installer ran before the locked-package preflight.'
+
+        . (Join-Path $PSScriptRoot 'psmux-package.ps1')
+        $global:DotfilesMuxVersion = [version]'3.3.4'
+        function Get-PsmuxPackageVersion { $global:DotfilesMuxVersion }
+        $rejected = $false
+        try { Assert-PsmuxPackageUnlocked -RequiredVersion '3.3.8' } catch { $rejected = $true }
+        Assert $rejected 'A locked older multiplexer was allowed to upgrade.'
+        $global:DotfilesMuxVersion = [version]'3.3.8'
+        Assert-PsmuxPackageUnlocked -RequiredVersion '3.3.8'
+        $global:DotfilesMuxVersion = [version]'3.3.4'
+        $global:DotfilesMuxProcesses = @([pscustomobject]@{ Id = 104; Path = (Join-Path $scratch 'portable/tmux.exe') })
+        Assert-PsmuxPackageUnlocked -RequiredVersion '3.3.8'
+        Write-Output 'PASS PSMux upgrade locks, partial-install recovery, offline preview, and unaffected installations'
+    } finally {
+        $env:LOCALAPPDATA = $previousLocalAppData
+        Remove-Item Function:\Get-Process, Function:\Get-PsmuxPackageVersion, Function:\Assert-PsmuxPackageUnlocked -ErrorAction SilentlyContinue
+        Remove-Variable DotfilesMuxProcessCalls, DotfilesMuxProcesses, DotfilesMuxVersion -Scope Global -ErrorAction SilentlyContinue
+    }
     foreach ($skipCode in @(-1978335135, -1978335189)) {
         $global:DotfilesWingetSkipCode = $skipCode
         $global:DotfilesPackageCalls.Clear()
@@ -153,7 +206,7 @@ try {
     $env:XDG_CONFIG_HOME = $previousXdg
     $env:NVIM_APPNAME = $previousAppName
     $env:PATH = $previousPath
-    Remove-Item Function:\winget, Function:\tree-sitter, Function:\nvim -ErrorAction SilentlyContinue
+    Remove-Item Function:\winget, Function:\tree-sitter, Function:\nvim, Function:\uv, Function:\psmux -ErrorAction SilentlyContinue
     Remove-Variable DotfilesPackageCalls -Scope Global -ErrorAction SilentlyContinue
     Remove-Variable DotfilesWingetSkipCode -Scope Global -ErrorAction SilentlyContinue
     # The generated path must remain an immediate child of the system temp folder.
