@@ -971,8 +971,18 @@ cmp -s "$tpm_fixture/.git/HEAD" \
 grep -Fqx $'INSTALL\t.tmux/plugins/tpm\t-' \
 	"$tpm_apply_backup/restore.manifest"
 tpm_exec_log="$check_root/tpm-executed.log"
-HOME=$tpm_apply_home CHECK_TPM_EXEC_LOG=$tpm_exec_log \
-	sh "$tpm_apply_home/.tmux/load-tpm.sh"
+(
+	# An inherited TPM override can select the caller's real plugins even when
+	# HOME points at the fixture. Keep execution away from the caller's server.
+	unset TMUX_TPM_PATH TMUX_PLUGIN_MANAGER_PATH TMUX TMUX_PANE
+	tpm_selected_path=$(HOME=$tpm_apply_home \
+		XDG_CONFIG_HOME="$tpm_apply_home/.config" \
+		sh "$tpm_apply_home/.tmux/load-tpm.sh" --print-path)
+	[[ $tpm_selected_path == "$tpm_apply_home/.tmux/plugins/tpm/tpm" ]]
+	HOME=$tpm_apply_home XDG_CONFIG_HOME="$tpm_apply_home/.config" \
+		CHECK_TPM_EXEC_LOG=$tpm_exec_log \
+		sh "$tpm_apply_home/.tmux/load-tpm.sh"
+)
 grep -Fxq executed "$tpm_exec_log"
 
 printf '%s\n' 'preserve this local TPM state' \
@@ -1378,7 +1388,7 @@ for astro_unsupported_version in 0.10.4 0.11.6 0.13.0-dev 1.0.0; do
 		"$astro_version_log" unset unset --apply)
 	grep -Fq 'Neovim 0.12.x is unavailable' <<<"$astro_version_output"
 	grep -Fxq VERSION "$astro_version_log"
-	[[ $(wc -l <"$astro_version_log") == 1 ]]
+	(( $(wc -l <"$astro_version_log") == 1 ))
 	[[ ! -s $astro_git_log && ! -e $astro_version_home/.local/share/nvim ]]
 	cmp .config/nvim/init.lua "$astro_version_home/.config/nvim/init.lua"
 done
@@ -1802,18 +1812,30 @@ if command -v tmux >/dev/null 2>&1; then
 			}
 			trap cleanup_tmux_checks EXIT
 
+			tmux_repo_binding() {
+				# Some tmux versions return no text for a single-key query and
+				# succeed for missing keys. Inspect the full table instead.
+				HOME="$tmux_home" TMUX='' tmux -S "$local_socket" \
+					list-keys -T prefix |
+					awk -v key="$1" '
+						$1 == "bind-key" && $2 == "-T" && $3 == "prefix" && $4 == key {
+							print; found = 1
+						}
+						END { exit !found }
+					'
+			}
+
 			mkdir -p "$tmux_p_repo" "$tmux_s_repo"
 			run_bootstrap Linux "$tmux_home" --apply >/dev/null
 
 			HOME="$tmux_home" TMUX='' TERM=xterm-256color \
+				TMUX_TPM_PATH=$offline_tpm \
 				DOTFILES_TMUX_P_REPO="$tmux_p_repo" \
 				DOTFILES_TMUX_S_REPO="$tmux_s_repo" \
 				tmux -S "$local_socket" -f "$tmux_home/.tmux.conf" \
 				new-session -d -s dotfiles-environment
-			p_binding=$(HOME="$tmux_home" TMUX='' tmux -S "$local_socket" \
-				list-keys -T prefix P)
-			s_binding=$(HOME="$tmux_home" TMUX='' tmux -S "$local_socket" \
-				list-keys -T prefix S)
+			p_binding=$(tmux_repo_binding P)
+			s_binding=$(tmux_repo_binding S)
 			grep -Fq '$HOME/.tmux/layouts/dev-3cols.sh' <<<"$p_binding"
 			grep -Fq '$DOTFILES_TMUX_P_REPO' <<<"$p_binding"
 			grep -Fq '$HOME/.tmux/layouts/dev-3cols.sh' <<<"$s_binding"
@@ -1826,13 +1848,11 @@ if command -v tmux >/dev/null 2>&1; then
 				DOTFILES_TMUX_P_REPO
 			HOME="$tmux_home" TMUX='' tmux -S "$local_socket" \
 				source-file "$tmux_home/.tmux.conf"
-			if HOME="$tmux_home" TMUX='' tmux -S "$local_socket" \
-				list-keys -T prefix P >/dev/null 2>&1; then
+			if tmux_repo_binding P >/dev/null; then
 				printf 'tmux reload retained stale P binding after unsetting its variable\n' >&2
 				exit 1
 			fi
-			HOME="$tmux_home" TMUX='' tmux -S "$local_socket" \
-				list-keys -T prefix S >/dev/null
+			tmux_repo_binding S >/dev/null
 			HOME="$tmux_home" TMUX='' tmux -S "$local_socket" \
 				set-environment -gu DOTFILES_TMUX_S_REPO
 			HOME="$tmux_home" TMUX='' tmux -S "$local_socket" \
@@ -1840,8 +1860,7 @@ if command -v tmux >/dev/null 2>&1; then
 				DOTFILES_TMUX_S_REPO
 			HOME="$tmux_home" TMUX='' tmux -S "$local_socket" \
 				source-file "$tmux_home/.tmux.conf"
-			if HOME="$tmux_home" TMUX='' tmux -S "$local_socket" \
-				list-keys -T prefix S >/dev/null 2>&1; then
+			if tmux_repo_binding S >/dev/null; then
 				printf 'tmux reload retained stale S binding after unsetting its variable\n' >&2
 				exit 1
 			fi
