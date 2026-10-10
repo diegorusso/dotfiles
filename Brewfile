@@ -2,6 +2,7 @@
 # macOS additions are in macos/Brewfile.
 brew "fzf"
 brew "ccmux"
+brew "gh"
 brew "neovim"
 brew "ripgrep"
 brew "shellcheck"
