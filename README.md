@@ -491,7 +491,7 @@ application bundle explicitly:
 ```
 
 The work profile adds only 1Password, Discord, Fastmail, Hack Nerd Font,
-Ghostty, Rectangle, WhatsApp, and The Unarchiver. The personal profile adds the
+Ghostty, Obsidian, Rectangle, WhatsApp, and The Unarchiver. The personal profile adds the
 full personal GUI/font application list. `--work` and `--personal` are mutually
 exclusive. The old `./macos/brew.sh` command delegates to this helper.
 
