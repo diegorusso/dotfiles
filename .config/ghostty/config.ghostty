@@ -21,6 +21,8 @@ keybind = super+alt+left=previous_tab
 keybind = super+alt+right=next_tab
 
 # Misc settings
+# Use a common terminal definition for SSH and Eternal Terminal connections.
+term = xterm-256color
 shell-integration = bash
 shell-integration-features = no-cursor
 copy-on-select = clipboard

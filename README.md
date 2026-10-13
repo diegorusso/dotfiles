@@ -542,6 +542,34 @@ and `./bootstrap.sh --apply` to install them. If you edit settings through
 Ghostty instead, copy the installed file back into the repository to save them.
 Bootstrap copies files; it does not keep them linked or synchronize edits back.
 
+Ghostty advertises `TERM=xterm-256color` for compatibility with standard
+macOS and Linux terminal databases. SSH and Eternal Terminal connections
+started from a fresh Ghostty shell therefore do not require Ghostty's own
+terminal definition on each receiving host. This favours compatibility over
+Ghostty-specific capabilities such as styled underlines; see the
+[Ghostty terminfo documentation](https://ghostty.org/docs/help/terminfo).
+
+After applying the configuration, reload Ghostty's configuration and open a
+new tab or window. Existing shells retain their previous `TERM`. Other
+terminal apps keep their own terminal settings; the shared shell files do not
+override `TERM` globally.
+
+Inside tmux, `TERM=tmux-256color` describes tmux's virtual terminal rather than
+the app connected to it. When connecting onwards from a tmux pane to an older
+host without that entry, use `TERM=screen-256color ssh HOST` or
+`TERM=screen-256color et HOST` for that connection. Minimal hosts still need a
+terminal database providing the selected standard entry.
+
+If your remote startup command ends with `tmux new -A -s ai; exit`, use
+`tmux new -A -s ai && exit` so a failed attachment leaves the shell open.
+
+tmux disables terminal passthrough by default. Applications that send terminal
+identification queries through passthrough can leave replies such as
+`>|ghostty 1.3.1` in the active pane as input. tmux still handles its own
+terminal negotiation and clipboard support; features that depend on direct
+passthrough, such as some inline graphics protocols, are unavailable. See the
+[upstream explanation](https://github.com/tmux/tmux/issues/5530).
+
 ## tmux
 
 The Unix configuration targets tmux 3.2 or newer on macOS and Linux, with Python
