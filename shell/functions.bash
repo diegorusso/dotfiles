@@ -135,6 +135,23 @@ o() {
 	fi
 }
 
+zj() {
+	local colour=${DOTFILES_COLOUR:-green} session
+	case $colour in
+		blue|green|purple|orange) ;;
+		*) colour=green ;;
+	esac
+	if (( $# == 0 )); then
+		session=$(hostname -s) || return
+		set -- attach --create --force-run-commands "$session"
+	fi
+	command zellij "$@" options --theme "dotfiles-$colour"
+}
+
+zrepo() {
+	bash "$HOME/.config/zellij/pick-repo.sh"
+}
+
 copy() {
 	if command -v pbcopy >/dev/null 2>&1; then
 		pbcopy

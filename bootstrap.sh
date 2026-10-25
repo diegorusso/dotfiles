@@ -282,6 +282,9 @@ manifest=(
 	'.config/starship.toml' '.config/starship.toml'
 	'.gitignore' '.gitignore'
 	'.tmux/load-tpm.sh' '.tmux/load-tpm.sh'
+	'.config/zellij/config.kdl' '.config/zellij/config.kdl'
+	'.config/zellij/pick-repo.sh' '.config/zellij/pick-repo.sh'
+	'.config/zellij/layouts/repo.kdl' '.config/zellij/layouts/repo.kdl'
 )
 
 if [[ $platform == macos ]]; then
@@ -345,6 +348,11 @@ restore_allowed_paths=(
 	.config/ghostty/config.ghostty
 	'Library/Application Support/com.mitchellh.ghostty/config.ghostty'
 	.tmux/load-tpm.sh
+	.config/zellij/config.kdl
+	.config/zellij/pick-repo.sh
+	# Keep backups from the earlier Python picker restorable.
+	.config/zellij/pick-repo.py
+	.config/zellij/layouts/repo.kdl
 	.tmux/plugins/tpm
 	.local/share/nvim
 	.config/dotfiles/shell

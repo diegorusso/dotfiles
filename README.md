@@ -26,6 +26,7 @@ shell/                       shared environment and interactive Bash layers
 .config/ghostty/             macOS-only Ghostty terminal settings
 .gitconfig, .gitignore       shared Git configuration and global ignore rules
 .tmux.conf, .tmux/           portable tmux configuration and layouts
+.config/zellij/             Zellij layout, repository picker, and device colours
 .config/nvim/                complete AstroNvim user configuration
 astronvim-health.lua         bootstrap-only AstroNvim startup validator
 Brewfile, brew.sh            shared Homebrew CLI packages and bundle helper
@@ -542,6 +543,14 @@ and `./bootstrap.sh --apply` to install them. If you edit settings through
 Ghostty instead, copy the installed file back into the repository to save them.
 Bootstrap copies files; it does not keep them linked or synchronize edits back.
 
+Use **left Option** for terminal Alt shortcuts. `macos-option-as-alt = left`
+keeps right Option available for typing special characters. Ghostty's default
+Option+Left/Right word-jump bindings are unbound so Zellij receives the actual
+Alt+arrow keys; Cmd+Option+Left/Right still switches Ghostty tabs. See
+[Ghostty's Option setting](https://ghostty.org/docs/config/reference#macos-option-as-alt)
+and its [Zellij arrow-key guidance](https://github.com/ghostty-org/ghostty/discussions/3207).
+Reload the configuration with **Cmd+Shift+,** after applying these settings.
+
 Ghostty advertises `TERM=xterm-256color` for compatibility with standard
 macOS and Linux terminal databases. SSH and Eternal Terminal connections
 started from a fresh Ghostty shell therefore do not require Ghostty's own
@@ -569,6 +578,78 @@ identification queries through passthrough can leave replies such as
 terminal negotiation and clipboard support; features that depend on direct
 passthrough, such as some inline graphics protocols, are unavailable. See the
 [upstream explanation](https://github.com/tmux/tmux/issues/5530).
+
+## Zellij
+
+Install packages with `./brew.sh --apply` and configuration with
+`./bootstrap.sh --apply`. From a fresh shell outside an existing multiplexer,
+change to a checkout and run:
+
+```bash
+zj                         # Create or reattach to this machine's session.
+zj --session development   # New named session.
+zj attach development      # Attach to an existing session.
+```
+
+Plain `zj` uses the short hostname (`hostname -s`) as the session name, so each
+machine reuses its own session. The hostname appears in Zellij's top bar and
+the terminal title. Detach with **Ctrl+O, then d**; running `zj` again returns to
+the same panes and processes. If the session has stopped, plain `zj` resurrects
+it and automatically runs all saved pane commands, including Neovim and Codex,
+without the "Press Enter" prompt. This applies to any saved command, so detach
+when you want processes to keep running. Explicit arguments keep their usual
+behaviour.
+
+The initial layout has three equal columns, left to right: Neovim (`nvim`), a
+shell, and one Codex pane running `codex resume --last`. The shell starts focused.
+Codex selects the latest interactive conversation in the current directory,
+using its normal settings and permissions. On exit or failure, Neovim and Codex
+leave an ordinary shell in their pane; neither command automatically loops after exit.
+If Codex cannot find a conversation to resume, start `codex` from that shell.
+Ordinary new panes and tabs are shells. New panes inherit the focused pane's
+current directory, including after `cd` into a subdirectory.
+
+`zj` selects the accent from the existing `DOTFILES_COLOUR` export in
+`~/.config/extra`: `blue` (work Mac), `green` (Linux VM), `purple` (personal Mac),
+or `orange` (RPi5). Unset or unknown values use green. Bars have dark backgrounds
+tinted to the device colour, with bright matching text and coloured mode labels.
+The selected tab has a brighter background than inactive tabs. Full pane borders
+highlight the focused pane in the device colour. Direct `zellij` launches use the
+same layout and shortcuts with the default green accent.
+
+Zellij's default shortcuts are inherited from the installed version. Enter a
+mode to see its shortcut hints in the bottom bar; press Esc or Enter to return
+to normal mode. **Ctrl+B, then Shift+R** opens the repo picker; **Ctrl+B, then ?**
+opens floating shortcut help. In the help pane, use `/` to search and `q` to close.
+From a Bash prompt inside Zellij, `zrepo` opens the same picker.
+Use **Ctrl+G** to lock/unlock Zellij's shortcuts when Neovim or another program
+needs those keys.
+
+| Shortcut | Action |
+| --- | --- |
+| Ctrl+B, then `R` | Repository/worktree picker; open the selected checkout in a new three-pane tab |
+| Ctrl+B, then `?` | Floating shortcut reference; `q` closes it and `/` searches |
+| Ctrl+P, then `r` / `d` | Split right / down, inheriting the focused pane's directory |
+| Ctrl+P, then arrows or `h/j/k/l` | Focus a pane; Esc returns to normal mode |
+| Ctrl+P, then `f` / `x` | Zoom / close the pane (Zellij closes without a confirmation prompt) |
+| Ctrl+T, then `n` / `r` / `1`…`9` | New shell tab / rename tab / select a tab |
+| Ctrl+T, then `x` | Close the tab and all its panes without confirmation |
+| Ctrl+N | Resize mode |
+| Ctrl+S | Scroll mode; `s` starts a search |
+| Ctrl+O, then `w` / `d` | Session manager / detach |
+
+The help pane shows the custom bindings above the installed Zellij defaults.
+The defaults are also available with `zellij setup --dump-config | less`.
+
+The picker searches `~/repos` and Git's registered worktrees, including
+worktrees outside that directory. Set `DOTFILES_REPO_ROOT` in `~/.config/extra`
+for another repository parent. Each selection opens a new tab with one Codex
+pane; plain splits and new shell tabs never start another agent.
+
+Existing sessions retain their layouts. Use a new session to try this setup.
+Run `./tests/check-zellij.sh` for disposable integration checks with fake Neovim
+and Codex commands; the tests do not start a real conversation. The picker uses
+Bash 3.2+, Git, fzf, and Zellij directly; it does not require Python or tmux.
 
 ## tmux
 
@@ -806,7 +887,7 @@ Run the local checks before installing or committing:
 This checks Bash syntax, Git configuration parsing, package manifest shape,
 Homebrew installation/reuse and bundle selection on Linux and macOS, Linux command
 ownership and APT removal suggestions, Neovim Lua and lock-file syntax, Starship
-configuration parsing, isolated Linux
+configuration parsing, isolated Zellij and tmux sessions, isolated Linux
 and macOS bootstrap installation/idempotence, reversible restore and validation
 guards, `~/.config/extra` preservation and startup behavior, permission repair,
 simulated macOS-defaults backup behavior, whitespace, and ShellCheck when it is

@@ -1,0 +1,81 @@
+// Device accents are selected by zj; direct zellij launches default to green.
+theme "dotfiles-green"
+default_layout "repo"
+pane_frame_style "full"
+
+// Inherit Zellij's defaults; add the repository picker and help to Ctrl+B mode.
+keybinds {
+    tmux {
+        bind "?" {
+            Run "bash" "-c" "{ printf '%s\\n' 'Custom shortcuts: Ctrl+B R = repo picker; Ctrl+B ? = help' ''; zellij setup --dump-config; } | less" {
+                name "Shortcuts (q to close, / to search)"
+                floating true
+                close_on_exit true
+            }
+            SwitchToMode "Normal"
+        }
+        bind "R" {
+            Run "bash" "-c" "exec bash \"$HOME/.config/zellij/pick-repo.sh\"" {
+                floating true
+                close_on_exit true
+            }
+            SwitchToMode "Normal"
+        }
+    }
+}
+
+themes {
+    // Legacy palettes use fg for inactive tab backgrounds and white for UI text.
+    dotfiles-green {
+        fg "#509c67"
+        bg "#21482e"
+        black "#102b1b"
+        red "#e67e80"
+        green "#87d787"
+        yellow "#dbbc7f"
+        blue "#7fbbb3"
+        magenta "#d699b6"
+        orange "#e69875"
+        cyan "#83c092"
+        white "#b7efc5"
+    }
+    dotfiles-blue {
+        fg "#5f94c8"
+        bg "#173f5f"
+        black "#10283f"
+        red "#e67e80"
+        green "#5fafff"
+        yellow "#dbbc7f"
+        blue "#7fbbb3"
+        magenta "#d699b6"
+        orange "#e69875"
+        cyan "#83c092"
+        white "#bfddff"
+    }
+    dotfiles-purple {
+        fg "#9f7ac8"
+        bg "#402854"
+        black "#281838"
+        red "#e67e80"
+        green "#af87ff"
+        yellow "#dbbc7f"
+        blue "#7fbbb3"
+        magenta "#d699b6"
+        orange "#e69875"
+        cyan "#83c092"
+        white "#e0c8ff"
+    }
+    dotfiles-orange {
+        fg "#bd834b"
+        bg "#52351d"
+        black "#322115"
+        red "#e67e80"
+        green "#ffaf5f"
+        yellow "#dbbc7f"
+        blue "#7fbbb3"
+        magenta "#d699b6"
+        orange "#e69875"
+        cyan "#83c092"
+        white "#ffdfba"
+    }
+}

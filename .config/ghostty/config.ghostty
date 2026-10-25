@@ -16,6 +16,11 @@ adjust-cell-height=1
 
 # Keybindings
 # super==cmd, alt==opt
+# Left Option sends Alt to terminal apps; right Option still types symbols.
+macos-option-as-alt = left
+# Pass Alt+arrows through instead of translating them to word-jump keys.
+keybind = alt+left=unbind
+keybind = alt+right=unbind
 # move between tabs is cmd+alt+arrow
 keybind = super+alt+left=previous_tab
 keybind = super+alt+right=next_tab

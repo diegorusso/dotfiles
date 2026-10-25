@@ -18,6 +18,8 @@ bash_files=(
 	check.sh
 	tests/check-nvim.sh
 	tests/check-tmux.sh
+	tests/check-zellij.sh
+	.config/zellij/pick-repo.sh
 	.tmux/load-tpm.sh
 	.tmux/layouts/dev-3cols.sh
 	.tmux/layouts/pick-repo.sh
@@ -62,6 +64,7 @@ awk '
 ' linux/packages.txt
 printf 'PASS package manifest shape\n'
 
+bash tests/check-zellij.sh
 bash tests/check-tmux.sh
 
 if command -v nvim >/dev/null 2>&1; then
@@ -719,6 +722,9 @@ check_bootstrap_platform() {
 		exit 1
 	fi
 	cmp -s .config/starship.toml "$check_home/.config/starship.toml"
+	cmp -s .config/zellij/config.kdl "$check_home/.config/zellij/config.kdl"
+	cmp -s .config/zellij/pick-repo.sh "$check_home/.config/zellij/pick-repo.sh"
+	cmp -s .config/zellij/layouts/repo.kdl "$check_home/.config/zellij/layouts/repo.kdl"
 	if [[ $platform == macos ]]; then
 		cmp -s .config/ghostty/config.ghostty \
 			"$check_home/Library/Application Support/com.mitchellh.ghostty/config.ghostty"

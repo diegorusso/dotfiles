@@ -1,0 +1,17 @@
+layout {
+    default_tab_template {
+        pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
+        children
+        pane size=1 borderless=true { plugin location="zellij:status-bar"; }
+    }
+    tab split_direction="vertical" {
+        // Commands run once, then become ordinary shells even after an interrupted exit.
+        pane name="nvim" command="bash" close_on_exit=true {
+            args "-c" "trap ':' INT; nvim; exec \"${SHELL:-/bin/bash}\""
+        }
+        pane name="shell" focus=true
+        pane name="codex" command="bash" close_on_exit=true {
+            args "-c" "trap ':' INT; codex resume --last; exec \"${SHELL:-/bin/bash}\""
+        }
+    }
+}
