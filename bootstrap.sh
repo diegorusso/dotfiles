@@ -284,7 +284,9 @@ manifest=(
 	'.tmux/load-tpm.sh' '.tmux/load-tpm.sh'
 	'.config/zellij/config.kdl' '.config/zellij/config.kdl'
 	'.config/zellij/pick-repo.sh' '.config/zellij/pick-repo.sh'
+	'.config/zellij/open-monitor.sh' '.config/zellij/open-monitor.sh'
 	'.config/zellij/layouts/repo.kdl' '.config/zellij/layouts/repo.kdl'
+	'.config/zellij/layouts/monitor.kdl' '.config/zellij/layouts/monitor.kdl'
 )
 
 if [[ $platform == macos ]]; then
@@ -350,9 +352,11 @@ restore_allowed_paths=(
 	.tmux/load-tpm.sh
 	.config/zellij/config.kdl
 	.config/zellij/pick-repo.sh
+	.config/zellij/open-monitor.sh
 	# Keep backups from the earlier Python picker restorable.
 	.config/zellij/pick-repo.py
 	.config/zellij/layouts/repo.kdl
+	.config/zellij/layouts/monitor.kdl
 	.tmux/plugins/tpm
 	.local/share/nvim
 	.config/dotfiles/shell

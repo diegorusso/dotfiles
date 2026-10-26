@@ -3,11 +3,11 @@ theme "dotfiles-green"
 default_layout "repo"
 pane_frame_style "full"
 
-// Inherit Zellij's defaults; add the repository picker and help to Ctrl+B mode.
+// Inherit Zellij's defaults; add workspace shortcuts to Ctrl+B mode.
 keybinds {
     tmux {
         bind "?" {
-            Run "bash" "-c" "{ printf '%s\\n' 'Custom shortcuts: Ctrl+B R = repo picker; Ctrl+B ? = help' ''; zellij setup --dump-config; } | less" {
+            Run "bash" "-c" "{ printf '%s\\n' 'Custom shortcuts: Ctrl+B R = repo picker; Ctrl+B M = monitor; Ctrl+B ? = help' ''; zellij setup --dump-config; } | less" {
                 name "Shortcuts (q to close, / to search)"
                 floating true
                 close_on_exit true
@@ -16,6 +16,14 @@ keybinds {
         }
         bind "R" {
             Run "bash" "-c" "exec bash \"$HOME/.config/zellij/pick-repo.sh\"" {
+                floating true
+                close_on_exit true
+            }
+            SwitchToMode "Normal"
+        }
+        bind "M" {
+            Run "bash" "-c" "exec bash \"$HOME/.config/zellij/open-monitor.sh\"" {
+                name "Open monitor"
                 floating true
                 close_on_exit true
             }

@@ -18,6 +18,7 @@ import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 PICKER = ROOT / ".config/zellij/pick-repo.sh"
+MONITOR = ROOT / ".config/zellij/open-monitor.sh"
 
 
 def wait_for(predicate):
@@ -30,6 +31,13 @@ def wait_for(predicate):
 
 
 class LauncherTests(unittest.TestCase):
+    def test_monitor_requires_a_session(self):
+        result = subprocess.run(["bash", str(MONITOR)],
+                                env=dict(os.environ, ZELLIJ_SESSION_NAME=""),
+                                text=True, capture_output=True, timeout=5)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("inside Zellij", result.stderr)
+
     def test_machine_default_and_explicit_sessions(self):
         with tempfile.TemporaryDirectory(prefix="dotfiles-zj-") as directory:
             binary = Path(directory)
@@ -160,6 +168,7 @@ class WorkspaceTests(unittest.TestCase):
         config = Path(self.env["ZELLIJ_CONFIG_DIR"])
         shutil.copytree(ROOT / ".config/zellij/layouts", config / "layouts")
         text = (ROOT / ".config/zellij/config.kdl").read_text().replace("$HOME/.config/zellij/pick-repo.sh", str(PICKER))
+        text = text.replace("$HOME/.config/zellij/open-monitor.sh", str(MONITOR))
         (config / "config.kdl").write_text(text + "\nshow_release_notes false\n")
         binary = self.root / "bin"
         binary.mkdir()
@@ -167,7 +176,7 @@ class WorkspaceTests(unittest.TestCase):
         hostname = binary / "hostname"
         hostname.write_text(f'#!/bin/sh\nprintf "%s\\n" "{self.session}"\n')
         hostname.chmod(0o755)
-        for command in ("nvim", "codex"):
+        for command in ("nvim", "codex", "htop", "sudo"):
             self.env[f"DOTFILES_TEST_{command.upper()}_LOG"] = str(self.root / (command + "-calls.jsonl"))
             fake = binary / command
             fake.write_text('''#!/usr/bin/env python3
@@ -308,6 +317,66 @@ for line in sys.stdin:
         self.assertEqual(len(selected), 3)
         self.assertTrue(all("[topic]" in p["tab_name"] for p in selected))
 
+    def test_monitor_shortcut_opens_reuses_and_recreates_three_panes(self):
+        uname = self.root / "bin/uname"
+        uname.write_text('#!/bin/sh\nprintf "Linux\\n"\n')
+        uname.chmod(0o755)
+        self.keys(b'\x02M')
+        wait_for(lambda: len(self.terminals()) == 6 and len(self.calls("sudo")) == 1)
+        monitor = sorted((p for p in self.terminals() if p["tab_name"] == "monitor"),
+                         key=lambda p: (p["pane_x"], p["pane_y"]))
+        self.assertEqual([p["title"] for p in monitor], ["htop", "dmesg", "shell"])
+        htop, logs, shell = monitor
+        self.assertEqual(htop["pane_x"] + htop["pane_columns"], logs["pane_x"])
+        self.assertEqual(logs["pane_x"], shell["pane_x"])
+        self.assertEqual(htop["pane_y"], logs["pane_y"])
+        self.assertEqual(logs["pane_y"] + logs["pane_rows"], shell["pane_y"])
+        self.assertEqual(htop["pane_rows"], logs["pane_rows"] + shell["pane_rows"])
+        self.assertLessEqual(abs(logs["pane_rows"] - shell["pane_rows"]), 1)
+        widths = [p["pane_columns"] for p in monitor]
+        self.assertLessEqual(max(widths) - min(widths), 1)
+        self.assertEqual(self.calls("htop"), [{"args": [], "cwd": self.env["HOME"]}])
+        self.assertEqual(self.calls("sudo"), [{"args": ["dmesg", "-wH"], "cwd": self.env["HOME"]}])
+        self.assertIsNone(monitor[2].get("terminal_command"))
+        self.assertTrue(monitor[1]["is_focused"])
+        self.assertEqual(len(self.calls()), 1)
+        self.assertEqual(len(self.calls("nvim")), 1)
+
+        initial = {p["id"] for p in self.terminals()}
+        self.action("go-to-tab", "1")
+        self.keys(b'\x02M')
+        wait_for(lambda: json.loads(self.action("current-tab-info", "--json"))["name"] == "monitor")
+        wait_for(lambda: {p["id"] for p in self.terminals()} == initial)
+        self.assertEqual(len(self.calls("htop")), 1)
+        self.assertEqual(len(self.calls("sudo")), 1)
+
+        self.keys(b'\x03')
+        wait_for(lambda: any(p["id"] == monitor[1]["id"] and p.get("pane_command") == "/bin/sh"
+                            for p in self.terminals()))
+        self.action("focus-pane-id", str(monitor[0]["id"]))
+        self.keys(b'exit\r')
+        wait_for(lambda: any(p["id"] == monitor[0]["id"] and p.get("pane_command") == "/bin/sh"
+                            for p in self.terminals()))
+        self.assertTrue(all(not p["exited"] and not p["is_held"] for p in self.terminals()))
+        self.assertEqual(len(self.calls("htop")), 1)
+        self.assertEqual(len(self.calls("sudo")), 1)
+
+        self.action("close-tab")
+        wait_for(lambda: len(self.terminals()) == 3)
+        self.keys(b'\x02M')
+        wait_for(lambda: len(self.terminals()) == 6 and len(self.calls("sudo")) == 2)
+        self.assertEqual(len(self.calls("htop")), 2)
+        self.assertEqual(len(self.calls()), 1)
+
+    def test_monitor_uses_macos_kernel_log_stream(self):
+        uname = self.root / "bin/uname"
+        uname.write_text('#!/bin/sh\nprintf "Darwin\\n"\n')
+        uname.chmod(0o755)
+        self.keys(b'\x02M')
+        wait_for(lambda: len(self.calls("sudo")) == 1)
+        self.assertEqual(self.calls("sudo")[0]["args"],
+                         ["log", "stream", "--style", "compact", "--predicate", 'process == "kernel"'])
+
     def test_selected_tab_has_distinct_background_after_switching(self):
         self.action("rename-tab", "First")
         self.keys(b'\x14n')
@@ -334,7 +403,7 @@ for line in sys.stdin:
         self.keys(b'\x02?')
         help_pane = wait_for(lambda: next((p for p in self.terminals() if p["id"] not in initial), None))
         self.assertTrue(help_pane["is_floating"])
-        wait_for(lambda: "Custom shortcuts: Ctrl+B R = repo picker; Ctrl+B ? = help" in
+        wait_for(lambda: "Custom shortcuts: Ctrl+B R = repo picker; Ctrl+B M = monitor; Ctrl+B ? = help" in
                  self.action("dump-screen", "--pane-id", str(help_pane["id"])))
         self.assertIn("keybinds {", self.action("dump-screen", "--pane-id", str(help_pane["id"])))
         self.keys(b'q')

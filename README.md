@@ -628,6 +628,7 @@ needs those keys.
 | Shortcut | Action |
 | --- | --- |
 | Ctrl+B, then `R` | Repository/worktree picker; open the selected checkout in a new three-pane tab |
+| Ctrl+B, then `M` | Open/reuse the `monitor` tab: htop, kernel logs, and a shell |
 | Ctrl+B, then `?` | Floating shortcut reference; `q` closes it and `/` searches |
 | Ctrl+P, then `r` / `d` | Split right / down, inheriting the focused pane's directory |
 | Ctrl+P, then arrows or `h/j/k/l` | Focus a pane; Esc returns to normal mode |
@@ -645,6 +646,13 @@ The picker searches `~/repos` and Git's registered worktrees, including
 worktrees outside that directory. Set `DOTFILES_REPO_ROOT` in `~/.config/extra`
 for another repository parent. Each selection opens a new tab with one Codex
 pane; plain splits and new shell tabs never start another agent.
+
+**Ctrl+B, then Shift+M** opens a `monitor` tab: `htop` fills the left half,
+with kernel logs above an empty shell in the right half. Repeating the shortcut
+returns to the tab named `monitor`. The log pane starts focused so you can enter
+your sudo password if prompted. Linux follows the kernel log with `sudo dmesg -wH`;
+macOS uses `sudo log stream --style compact --predicate 'process == "kernel"'`.
+Stopping either command leaves a shell in its pane, without restarting it.
 
 Existing sessions retain their layouts. Use a new session to try this setup.
 Run `./tests/check-zellij.sh` for disposable integration checks with fake Neovim

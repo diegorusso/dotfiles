@@ -1,0 +1,19 @@
+layout {
+    default_tab_template {
+        pane size=1 borderless=true { plugin location="zellij:tab-bar"; }
+        children
+        pane size=1 borderless=true { plugin location="zellij:status-bar"; }
+    }
+    tab name="monitor" split_direction="vertical" {
+        pane name="htop" size="50%" command="bash" close_on_exit=true {
+            args "-c" "trap ':' INT; htop; exec \"${SHELL:-/bin/bash}\""
+        }
+        pane size="50%" split_direction="horizontal" {
+            // macOS dmesg cannot follow new messages; stream its kernel log instead.
+            pane name="dmesg" size="50%" command="bash" close_on_exit=true focus=true {
+                args "-c" "trap ':' INT; if [[ $(uname -s) == Darwin ]]; then sudo log stream --style compact --predicate 'process == \"kernel\"'; else sudo dmesg -wH; fi; exec \"${SHELL:-/bin/bash}\""
+            }
+            pane name="shell" size="50%"
+        }
+    }
+}

@@ -20,6 +20,7 @@ bash_files=(
 	tests/check-tmux.sh
 	tests/check-zellij.sh
 	.config/zellij/pick-repo.sh
+	.config/zellij/open-monitor.sh
 	.tmux/load-tpm.sh
 	.tmux/layouts/dev-3cols.sh
 	.tmux/layouts/pick-repo.sh
@@ -724,7 +725,9 @@ check_bootstrap_platform() {
 	cmp -s .config/starship.toml "$check_home/.config/starship.toml"
 	cmp -s .config/zellij/config.kdl "$check_home/.config/zellij/config.kdl"
 	cmp -s .config/zellij/pick-repo.sh "$check_home/.config/zellij/pick-repo.sh"
+	cmp -s .config/zellij/open-monitor.sh "$check_home/.config/zellij/open-monitor.sh"
 	cmp -s .config/zellij/layouts/repo.kdl "$check_home/.config/zellij/layouts/repo.kdl"
+	cmp -s .config/zellij/layouts/monitor.kdl "$check_home/.config/zellij/layouts/monitor.kdl"
 	if [[ $platform == macos ]]; then
 		cmp -s .config/ghostty/config.ghostty \
 			"$check_home/Library/Application Support/com.mitchellh.ghostty/config.ghostty"
