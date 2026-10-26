@@ -4,6 +4,7 @@
         { "id": "Microsoft.WindowsTerminal" },
         { "id": "marlocarlo.psmux", "version": "3.3.8" },
         { "id": "Git.Git" },
+        { "id": "GitHub.cli" },
         { "id": "GitHub.GitLFS" },
         { "id": "Starship.Starship" },
         { "id": "Neovim.Neovim", "version": "0.12.5" },

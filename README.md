@@ -40,7 +40,8 @@ check.sh                     local static and isolated integration validation
 
 ## Native Windows
 
-Windows uses PowerShell 7, Windows Terminal, and WinGet. Git, the Catppuccin
+Windows uses PowerShell 7, Windows Terminal, and WinGet. Core packages include
+GitHub CLI (`gh`). Git, the Catppuccin
 Starship prompt, and the complete Neovim configuration share the repository
 sources used by Linux and macOS. Windows has its own shell functions and package
 profiles. PSMux provides native sessions and the repository/worktree workflow
