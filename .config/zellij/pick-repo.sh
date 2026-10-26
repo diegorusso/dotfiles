@@ -10,7 +10,7 @@ fail() {
 }
 
 [[ -n ${ZELLIJ_SESSION_NAME:-} ]] || fail 'Open the repository picker inside Zellij'
-for dependency in git fzf zellij; do
+for dependency in git fzf jq zellij; do
 	command -v "$dependency" >/dev/null 2>&1 || fail "Repository picker requires $dependency"
 done
 
@@ -72,6 +72,20 @@ esac
 directory=${selection%%$'\t'*}
 label=${selection#*$'\t'}
 [[ -d $directory ]] || fail 'The selected checkout is no longer available'
+
+panes=$(zellij --session "$ZELLIJ_SESSION_NAME" action list-panes --json |
+	jq -c '[.[] | select(.is_plugin == false and .is_floating == false and .pane_cwd != null)]') ||
+	fail 'Could not inspect open repository tabs'
+while IFS= read -r -d '' tab_id && IFS= read -r -d '' pane_directory; do
+	# Resolve subdirectories to their checkout, keeping separate worktrees distinct.
+	pane_checkout=$(git -C "$pane_directory" rev-parse --show-toplevel 2>/dev/null ||
+		printf '%s' "$pane_directory")
+	pane_checkout=$(CDPATH='' cd -P -- "$pane_checkout" 2>/dev/null && printf '%s/' "$PWD") || continue
+	[[ ${pane_checkout%/} == "$directory" ]] || continue
+	zellij --session "$ZELLIJ_SESSION_NAME" action go-to-tab-by-id "$tab_id" >/dev/null ||
+		fail 'Could not switch to the repository tab'
+	exit 0
+done < <(jq -j '.[] | .tab_id, "\u0000", .pane_cwd, "\u0000"' <<<"$panes")
 
 zellij --session "$ZELLIJ_SESSION_NAME" action new-tab \
 	--layout "$script_dir/layouts/repo.kdl" --cwd "$directory" --name "$label" >/dev/null ||

@@ -94,6 +94,10 @@ printf '%s\\n' "$rows" > "$DOTFILES_TEST_CANDIDATES"
 printf '%s\\n' "${DOTFILES_TEST_SELECTION-${rows%%$'\\n'*}}"
 ''',
             "zellij": '''#!/bin/bash
+if [[ $4 == list-panes ]]; then
+    printf '%s\\n' "${DOTFILES_TEST_PANES:-[]}"
+    exit "${DOTFILES_TEST_QUERY_STATUS:-0}"
+fi
 printf '%s\\0' "$@" > "$DOTFILES_TEST_ZELLIJ_ARGS"
 exit "${DOTFILES_TEST_ZELLIJ_STATUS:-0}"
 ''',
@@ -149,6 +153,48 @@ exit "${DOTFILES_TEST_ZELLIJ_STATUS:-0}"
         result = self.run_picker(DOTFILES_TEST_ZELLIJ_STATUS="7")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("Could not open", result.stderr)
+
+    def test_existing_checkout_matches_subdirectories_and_symlinks_after_renaming(self):
+        subprocess.run(["git", "-C", str(self.checkout), "init", "-q"], check=True)
+        nested = self.checkout / "nested \\ directory"
+        nested.mkdir()
+        alias = self.root / "checkout alias"
+        alias.symlink_to(self.checkout, target_is_directory=True)
+        for cwd in (self.checkout, nested, alias):
+            with self.subTest(cwd=cwd):
+                panes = [{"tab_id": 17, "tab_name": "renamed", "pane_cwd": str(cwd),
+                          "is_plugin": False, "is_floating": False}]
+                result = self.run_picker(DOTFILES_TEST_PANES=json.dumps(panes))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(self.calls.read_bytes().decode().split("\0")[:-1],
+                                 ["--session", "fixture", "action", "go-to-tab-by-id", "17"])
+        result = self.run_picker(DOTFILES_TEST_PANES=json.dumps(panes), DOTFILES_TEST_ZELLIJ_STATUS="7")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Could not switch", result.stderr)
+        self.assertFalse((self.root / "PWNED").exists())
+
+    def test_same_name_worktrees_and_floating_panes_do_not_reuse_the_wrong_tab(self):
+        subprocess.run(["git", "-C", str(self.checkout), "init", "-q"], check=True)
+        subprocess.run(["git", "-C", str(self.checkout), "-c", "user.name=Fixture",
+                        "-c", "user.email=fixture@example.test", "commit", "--allow-empty", "-qm", "fixture"], check=True)
+        worktree = self.root / "outside/topic"
+        subprocess.run(["git", "-C", str(self.checkout), "worktree", "add", "-qb", "topic", str(worktree)], check=True)
+        other = self.root / "elsewhere" / self.checkout.name
+        other.mkdir(parents=True)
+        panes = [{"tab_id": i, "tab_name": self.checkout.name, "pane_cwd": str(cwd),
+                  "is_plugin": False, "is_floating": floating}
+                 for i, (cwd, floating) in enumerate([(other, False), (worktree, False), (self.checkout, True)])]
+        result = self.run_picker(DOTFILES_TEST_PANES=json.dumps(panes))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.calls.read_bytes().decode().split("\0")[3], "new-tab")
+
+    def test_failed_or_invalid_pane_query_does_not_create_a_duplicate(self):
+        for environment in ({"DOTFILES_TEST_QUERY_STATUS": "7"}, {"DOTFILES_TEST_PANES": "invalid JSON"}):
+            with self.subTest(environment=environment):
+                result = self.run_picker(**environment)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("Could not inspect", result.stderr)
+                self.assertFalse(self.calls.exists())
 
 
 @unittest.skipUnless(shutil.which("zellij") and shutil.which("fzf"), "Zellij/fzf not installed")
@@ -318,6 +364,17 @@ for line in sys.stdin:
         selected = [p for p in self.terminals() if p.get("pane_cwd") == str(self.worktree)]
         self.assertEqual(len(selected), 3)
         self.assertTrue(all("[topic]" in p["tab_name"] for p in selected))
+        self.action("rename-tab", "Working topic")
+        existing = {p["id"] for p in self.terminals()}
+        target = selected[0]["tab_id"]
+        original = next(p["tab_id"] for p in self.terminals() if p["tab_id"] != target)
+        self.action("go-to-tab-by-id", str(original))
+        self.keys(b'\x02R')
+        wait_for(lambda: json.loads(self.action("current-tab-info", "--json"))["tab_id"] == target)
+        wait_for(lambda: {p["id"] for p in self.terminals()} == existing)
+        self.assertEqual(len(self.calls()), 2)
+        self.assertEqual(len(self.calls("nvim")), 2)
+        self.assertTrue(all(p["tab_name"] == "Working topic" for p in self.terminals() if p["tab_id"] == target))
 
     def test_monitor_shortcut_opens_reuses_and_recreates_three_panes(self):
         uname = self.root / "bin/uname"

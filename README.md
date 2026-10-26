@@ -627,7 +627,7 @@ needs those keys.
 
 | Shortcut | Action |
 | --- | --- |
-| Ctrl+B, then `R` | Repository/worktree picker; open the selected checkout in a new three-pane tab |
+| Ctrl+B, then `R` | Repository/worktree picker; switch to its existing tab or open a new three-pane tab |
 | Ctrl+B, then `M` | Open/reuse the `monitor` tab: htop, kernel logs, and a shell |
 | Ctrl+B, then `?` | Floating shortcut reference; `q` closes it and `/` searches |
 | Ctrl+P, then `r` / `d` | Split right / down, inheriting the focused pane's directory |
@@ -644,8 +644,11 @@ The defaults are also available with `zellij setup --dump-config | less`.
 
 The picker searches `~/repos` and Git's registered worktrees, including
 worktrees outside that directory. Set `DOTFILES_REPO_ROOT` in `~/.config/extra`
-for another repository parent. Each selection opens a new tab with one Codex
-pane; plain splits and new shell tabs never start another agent.
+for another repository parent. Selecting an open checkout switches to its tab,
+using pane directories so renamed tabs and repository subdirectories still
+match. Separate worktrees keep separate tabs. A checkout without an open tab
+gets a new tab with one Codex pane; plain splits and new shell tabs never start
+another agent.
 
 **Ctrl+B, then Shift+M** opens a `monitor` tab: `htop` fills the left half,
 with kernel logs above an empty shell in the right half. Repeating the shortcut
@@ -671,7 +674,7 @@ diagnostic log live under `${XDG_STATE_HOME:-~/.local/state}/dotfiles-zellij`.
 Existing sessions retain their layouts. Use a new session to try this setup.
 Run `./tests/check-zellij.sh` for disposable integration checks with fake Neovim
 and Codex commands; the tests do not start a real conversation. The picker uses
-Bash 3.2+, Git, fzf, and Zellij directly; it does not require Python or tmux.
+Bash 3.2+, Git, fzf, jq, and Zellij directly; it does not require Python or tmux.
 
 ## tmux
 
