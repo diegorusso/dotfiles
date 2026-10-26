@@ -726,6 +726,7 @@ check_bootstrap_platform() {
 	cmp -s .config/zellij/config.kdl "$check_home/.config/zellij/config.kdl"
 	cmp -s .config/zellij/pick-repo.sh "$check_home/.config/zellij/pick-repo.sh"
 	cmp -s .config/zellij/open-monitor.sh "$check_home/.config/zellij/open-monitor.sh"
+	cmp -s .config/zellij/ralphex.py "$check_home/.config/zellij/ralphex.py"
 	cmp -s .config/zellij/layouts/repo.kdl "$check_home/.config/zellij/layouts/repo.kdl"
 	cmp -s .config/zellij/layouts/monitor.kdl "$check_home/.config/zellij/layouts/monitor.kdl"
 	if [[ $platform == macos ]]; then

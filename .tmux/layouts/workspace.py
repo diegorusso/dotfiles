@@ -476,7 +476,7 @@ def relatives(pid, rows):
     family, current = {pid}, rows[pid]["parent"]
     for _ in range(6):
         row = rows.get(current)
-        if not row or row["name"] in ("tmux", "codex", "launchd", "systemd"):
+        if not row or row["name"] in ("tmux", "zellij", "codex", "launchd", "systemd"):
             break
         family.add(current)
         family.update(p for p, item in rows.items()

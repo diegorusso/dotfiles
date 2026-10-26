@@ -285,6 +285,7 @@ manifest=(
 	'.config/zellij/config.kdl' '.config/zellij/config.kdl'
 	'.config/zellij/pick-repo.sh' '.config/zellij/pick-repo.sh'
 	'.config/zellij/open-monitor.sh' '.config/zellij/open-monitor.sh'
+	'.config/zellij/ralphex.py' '.config/zellij/ralphex.py'
 	'.config/zellij/layouts/repo.kdl' '.config/zellij/layouts/repo.kdl'
 	'.config/zellij/layouts/monitor.kdl' '.config/zellij/layouts/monitor.kdl'
 )
@@ -353,6 +354,7 @@ restore_allowed_paths=(
 	.config/zellij/config.kdl
 	.config/zellij/pick-repo.sh
 	.config/zellij/open-monitor.sh
+	.config/zellij/ralphex.py
 	# Keep backups from the earlier Python picker restorable.
 	.config/zellij/pick-repo.py
 	.config/zellij/layouts/repo.kdl

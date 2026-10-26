@@ -654,6 +654,20 @@ your sudo password if prompted. Linux follows the kernel log with `sudo dmesg -w
 macOS uses `sudo log stream --style compact --predicate 'process == "kernel"'`.
 Stopping either command leaves a shell in its pane, without restarting it.
 
+Inside Zellij, Bash starts one background Ralphex watcher per session. Every
+five seconds it checks running Ralphex processes and their open output logs.
+If the repository is already open in a pane, it adds a floating `:logs` pane
+to that tab, preferring a tab for the runner's exact worktree when available.
+It starts hidden so your keyboard focus and tiled layout stay intact. Press
+**Alt+F** or **Ctrl+P, then w** to show/hide floating panes in the tab.
+The viewer follows new output, rotated logs, and subsequent runs without
+starting another agent. Closing the pane keeps it closed for that run,
+including after the watcher restarts. Ctrl+C leaves a shell; a later run can
+open a fresh viewer without interrupting that shell.
+The watcher uses Python 3 and `lsof`, and shares detection and streaming code
+with the installed tmux helper without requiring a tmux server. Its state and
+diagnostic log live under `${XDG_STATE_HOME:-~/.local/state}/dotfiles-zellij`.
+
 Existing sessions retain their layouts. Use a new session to try this setup.
 Run `./tests/check-zellij.sh` for disposable integration checks with fake Neovim
 and Codex commands; the tests do not start a real conversation. The picker uses

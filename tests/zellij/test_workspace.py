@@ -9,6 +9,7 @@ import shlex
 import shutil
 import struct
 import subprocess
+import sys
 import tempfile
 import termios
 import threading
@@ -19,6 +20,7 @@ import uuid
 ROOT = Path(__file__).resolve().parents[2]
 PICKER = ROOT / ".config/zellij/pick-repo.sh"
 MONITOR = ROOT / ".config/zellij/open-monitor.sh"
+RALPHEX = ROOT / ".config/zellij/ralphex.py"
 
 
 def wait_for(predicate):
@@ -376,6 +378,119 @@ for line in sys.stdin:
         wait_for(lambda: len(self.calls("sudo")) == 1)
         self.assertEqual(self.calls("sudo")[0]["args"],
                          ["log", "stream", "--style", "compact", "--predicate", 'process == "kernel"'])
+
+    @unittest.skipUnless(shutil.which("lsof"), "lsof not installed")
+    def test_ralphex_auto_logs_follow_runs_without_focus_or_agent_changes(self):
+        def stop(process):
+            if process.poll() is None:
+                process.terminate()
+            process.wait(timeout=5)
+
+        watcher = subprocess.Popen([sys.executable, str(RALPHEX), "watch", self.session],
+                                   env=self.env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        self.addCleanup(watcher.stderr.close)
+        self.addCleanup(stop, watcher)
+        runner = self.root / "bin/ralphex"
+        shutil.copyfile(shutil.which("sleep"), runner)
+        runner.chmod(0o755)
+        if shutil.which("codesign"):
+            subprocess.run(["codesign", "--force", "--sign", "-", str(runner)],
+                           check=True, capture_output=True)
+        command = [str(runner), "90"]
+        if sys.platform.startswith("linux"):
+            command = [sys.executable, "-c", 'import ctypes, time; '
+                       'assert ctypes.CDLL(None).prctl(15, b"ralphex", 0, 0, 0) == 0; '
+                       'time.sleep(90)']
+        unrelated = self.root / "unrelated"
+        unrelated.mkdir()
+        self.git(unrelated, "init", "-q")
+        with (unrelated / "other.log").open("w") as other_log:
+            other = subprocess.Popen(command, cwd=unrelated, stdout=other_log, stderr=other_log)
+        self.addCleanup(stop, other)
+        log = self.worktree / "runner's output.log"
+        stream = log.open("w")
+        self.addCleanup(stream.close)
+
+        def start_runner():
+            process = subprocess.Popen(command, cwd=self.worktree, stdout=stream, stderr=stream)
+            self.addCleanup(stop, process)
+            return process
+
+        original = self.terminals()
+        shell = next(p for p in original if p["title"] == "shell")
+        geometry = {p["id"]: tuple(p[k] for k in ("pane_x", "pane_y", "pane_columns", "pane_rows"))
+                    for p in original}
+        first = start_runner()
+        viewer = wait_for(lambda: next((p for p in self.terminals()
+                                      if p["title"].endswith(":logs")), None))
+        self.assertEqual(len(self.terminals()), 4)
+        self.assertEqual({p["tab_id"] for p in self.terminals()}, {shell["tab_id"]})
+        self.assertTrue(viewer["is_floating"])
+        self.assertFalse(json.loads(self.action("list-tabs", "--json"))[0]["are_floating_panes_visible"])
+        self.assertEqual({p["id"]: tuple(p[k] for k in ("pane_x", "pane_y", "pane_columns", "pane_rows"))
+                          for p in self.terminals() if p["id"] in geometry}, geometry)
+        self.assertEqual(viewer["pane_cwd"], str(self.worktree))
+        self.assertIn("[topic]", viewer["title"])
+        self.keys(b"printf 'FOCUS_STAYED_IN_SHELL\\n'\r")
+        wait_for(lambda: "FOCUS_STAYED_IN_SHELL" in self.action("dump-screen", "--pane-id", str(shell["id"])))
+        stream.write("RALPHEX_FIRST_RUN\n")
+        stream.flush()
+        wait_for(lambda: "RALPHEX_FIRST_RUN" in self.action("dump-screen", "--pane-id", str(viewer["id"])))
+        self.keys(b'\x1bf')  # Alt+F: show the log without creating another pane.
+        wait_for(lambda: json.loads(self.action("list-tabs", "--json"))[0]["are_floating_panes_visible"])
+        self.keys(b'\x10w')  # Ctrl+P, w: hide it again.
+        wait_for(lambda: not json.loads(self.action("list-tabs", "--json"))[0]["are_floating_panes_visible"])
+        duplicate = subprocess.run([sys.executable, str(RALPHEX), "watch", self.session],
+                                   env=self.env, capture_output=True, timeout=5)
+        self.assertEqual(duplicate.returncode, 0, duplicate.stderr)
+
+        stop(first)
+        stream.close()
+        stream = (self.worktree / "next-run.txt").open("w")
+        self.addCleanup(stream.close)
+        second = start_runner()
+        stream.write("RALPHEX_SECOND_RUN\n")
+        stream.flush()
+        wait_for(lambda: "RALPHEX_SECOND_RUN" in self.action("dump-screen", "--pane-id", str(viewer["id"])))
+        time.sleep(5.5)
+        self.assertEqual(len(self.terminals()), 4)
+        self.assertEqual(len(self.calls()), 1)
+        self.assertEqual(len(self.calls("nvim")), 1)
+
+        self.action("close-pane", "--pane-id", str(viewer["id"]))
+        time.sleep(5.5)
+        self.assertEqual(len(self.terminals()), 3)
+        self.assertEqual({p["id"] for p in self.terminals()}, set(geometry))
+        stop(watcher)
+        watcher = subprocess.Popen([sys.executable, str(RALPHEX), "watch", self.session],
+                                   env=self.env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        self.addCleanup(watcher.stderr.close)
+        self.addCleanup(stop, watcher)
+        time.sleep(5.5)
+        self.assertEqual(len(self.terminals()), 3)
+
+        self.action("new-tab", "--name", "worktree", "--cwd", str(self.worktree),
+                    "--no-focus", "--", "/bin/sh")
+        worktree_pane = wait_for(lambda: next((p for p in self.terminals() if p["tab_name"] == "worktree"), None))
+        stop(second)
+        start_runner()
+        viewer = wait_for(lambda: next((p for p in self.terminals()
+                                      if p["title"].endswith(":logs")), None))
+        self.assertEqual(viewer["tab_id"], worktree_pane["tab_id"])
+        self.assertTrue(viewer["is_floating"])
+        self.assertEqual(len(self.calls()), 1)
+        self.assertEqual(len(self.calls("nvim")), 1)
+        self.action("focus-pane-id", str(viewer["id"]))
+        self.keys(b'\x03')
+        wait_for(lambda: any(p["id"] == viewer["id"] and p.get("pane_command") == "/bin/sh"
+                            for p in self.terminals()))
+        time.sleep(5.5)
+        self.assertEqual(len(self.terminals()), 5)
+        self.assertTrue(any(p["id"] == viewer["id"] and p.get("pane_command") == "/bin/sh"
+                            for p in self.terminals()))
+        subprocess.run(["zellij", "kill-session", self.session], env=self.env,
+                       check=True, capture_output=True, timeout=10)
+        self.assertEqual(watcher.wait(timeout=20), 0)
 
     def test_selected_tab_has_distinct_background_after_switching(self):
         self.action("rename-tab", "First")

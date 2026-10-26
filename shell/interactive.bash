@@ -42,4 +42,8 @@ if command -v starship >/dev/null 2>&1; then
 	eval "$(starship init bash)"
 fi
 
+if [[ -n ${ZELLIJ_SESSION_NAME:-} && -r "$HOME/.config/zellij/ralphex.py" ]]; then
+	python3 "$HOME/.config/zellij/ralphex.py" start || true
+fi
+
 unset _dotfiles_shell_dir
