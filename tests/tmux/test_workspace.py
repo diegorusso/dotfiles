@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -171,7 +172,13 @@ class WorkspaceTests(unittest.TestCase):
         log = self.worktree / "automatic.log"
         active = workspace.tmux("display-message", "-p", "#{window_id}")
         with log.open("w") as stream:
-            job = subprocess.Popen([str(runner), "60"], cwd=self.worktree, stdout=stream, stderr=stream)
+            command = [str(runner), "60"]
+            if sys.platform.startswith("linux"):
+                # Renaming a multicall sleep binary does not produce a runnable fixture.
+                command = [sys.executable, "-c", 'import ctypes, time; '
+                           'assert ctypes.CDLL(None).prctl(15, b"ralphex", 0, 0, 0) == 0; '
+                           'time.sleep(60)']
+            job = subprocess.Popen(command, cwd=self.worktree, stdout=stream, stderr=stream)
             try:
                 self.wait_for(lambda: str(self.worktree) in workspace.discover())
                 self.wait_for(lambda: any(p.get("@repo-path") == str(self.worktree) and
