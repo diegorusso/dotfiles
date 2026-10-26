@@ -1,6 +1,28 @@
 ---@type LazySpec
 return {
   "AstroNvim/astrocore",
+  init = function()
+    if not vim.env.ZELLIJ or vim.g.clipboard ~= nil then return end
+    local provider = vim.fn["provider#clipboard#Executable"]()
+    if not vim.env.SSH_CONNECTION and not vim.env.SSH_TTY
+      and provider ~= "" and provider ~= "OSC 52"
+    then return end
+
+    local clipboard = { name = "OSC 52 (Zellij)", copy = {}, paste = {} }
+    for _, register in ipairs { "+", "*" } do
+      local contents = { {}, "v" }
+      local copy = require("vim.ui.clipboard.osc52").copy(register)
+      clipboard.copy[register] = function(lines, regtype)
+        contents = { lines, regtype }
+        copy(lines)
+      end
+      -- Avoid clipboard reads that can time out through Zellij; terminal paste handles external text.
+      clipboard.paste[register] = function() return contents end
+    end
+    vim.g.clipboard = clipboard
+    vim.g.loaded_clipboard_provider = nil
+    vim.cmd.runtime "autoload/provider/clipboard.vim"
+  end,
   ---@type AstroCoreOpts
   opts = {
     features = {

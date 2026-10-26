@@ -129,6 +129,9 @@ end
 LUA
 	printf 'PASS AstroCore option values\n'
 
+	DOTFILES_ASTROCORE_CHECK="$repo_dir/.config/nvim/lua/plugins/astrocore.lua" \
+		NVIM_LOG_FILE=/dev/null nvim --headless --clean -u NONE -i NONE -l tests/nvim-clipboard.lua
+
 	DOTFILES_NVIM_CONFIG="$repo_dir/.config/nvim" NVIM_LOG_FILE=/dev/null \
 		nvim --headless --clean -u NONE -i NONE -l /dev/stdin <<'LUA'
 local config_dir = vim.env.DOTFILES_NVIM_CONFIG

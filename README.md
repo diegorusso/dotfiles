@@ -841,6 +841,15 @@ preserved. All active plugins use the single `lazy-lock.json`; plugins removed
 by AstroNvim 6 are removed from the lock. Startup reports a clear error outside
 the Neovim 0.12 release series.
 
+Inside Zellij, Neovim keeps native clipboard tools on local macOS, Windows,
+and Linux desktops. Over SSH, or when no native clipboard provider is available
+(including a headless Linux VM reached through Eternal Terminal), it forwards
+yanks to the connected terminal using OSC 52. Use `yy` or select text and press
+`y`, then paste into another app normally. With OSC 52, Neovim's `p` uses the
+last text copied in that Neovim instance; use **Cmd+V** on macOS or the terminal's
+paste shortcut on Windows/Linux to insert text copied in another app. Explicit
+clipboard overrides are left unchanged.
+
 The shared Brewfile includes `tree-sitter-cli`, which is required to compile
 downloaded parsers. Use version 0.26.1 or newer, with a C compiler, `curl`, and
 `tar` available. Linux's `build-essential` package and macOS's Command Line

@@ -214,4 +214,14 @@ try {
     Assert ((Split-Path -LiteralPath $resolved).TrimEnd('\') -eq [IO.Path]::GetTempPath().TrimEnd('\')) 'Unsafe test cleanup path.'
     if (Test-Path -LiteralPath $resolved) { Remove-Item -LiteralPath $resolved -Recurse -Force }
 }
+if (Get-Command nvim -CommandType Application -ErrorAction SilentlyContinue) {
+    $previousClipboardCheck = $env:DOTFILES_ASTROCORE_CHECK
+    try {
+        $env:DOTFILES_ASTROCORE_CHECK = Join-Path $repo '.config/nvim/lua/plugins/astrocore.lua'
+        & nvim --headless --clean -u NONE -i NONE -l (Join-Path $repo 'tests/nvim-clipboard.lua')
+        Assert ($LASTEXITCODE -eq 0) 'Neovim clipboard checks failed.'
+    } finally { $env:DOTFILES_ASTROCORE_CHECK = $previousClipboardCheck }
+} else {
+    Write-Output 'SKIP Neovim clipboard checks (nvim not installed)'
+}
 Write-Output 'All native Windows checks passed.'

@@ -1,4 +1,5 @@
 """Exercise the actual keys/layout with disposable sessions and fake commands."""
+import base64
 import fcntl
 import json
 import os
@@ -582,6 +583,32 @@ for line in sys.stdin:
         wait_for(lambda: {p["id"] for p in self.terminals()} == initial)
         self.assertEqual(len(self.calls()), 1)
         self.assertEqual(len(self.calls("nvim")), 1)
+
+    @unittest.skipUnless(shutil.which("nvim"), "Neovim not installed")
+    def test_neovim_yank_reaches_attached_terminal_and_pastes_without_clipboard_reads(self):
+        marker = "clipboard café"
+        script = self.root / "clipboard.lua"
+        completed = self.root / "clipboard.ok"
+        spec = ROOT / ".config/nvim/lua/plugins/astrocore.lua"
+        script.write_text(f'''
+vim.env.SSH_CONNECTION = "fixture"
+dofile({json.dumps(str(spec))}).init()
+vim.opt.clipboard = "unnamedplus"
+vim.api.nvim_buf_set_lines(0, 0, -1, false, {{ "clipboard café" }})
+vim.cmd "normal! yy"
+vim.cmd "normal! p"
+assert(vim.deep_equal(vim.api.nvim_buf_get_lines(0, 0, -1, false),
+  {{ "clipboard café", "clipboard café" }}))
+assert(vim.v.errmsg == "", vim.v.errmsg)
+vim.fn.writefile({{ "ok" }}, {json.dumps(str(completed))})
+vim.defer_fn(function() vim.cmd "qa!" end, 100)
+''')
+        self.action("new-pane", "--close-on-exit", "--", shutil.which("nvim"),
+                    "--clean", "-u", "NONE", "-i", "NONE", "-n", "-c", f"luafile {script}")
+        expected = b"\x1b]52;c;" + base64.b64encode((marker + "\n").encode())
+        wait_for(lambda: expected in self.output)
+        wait_for(completed.exists)
+        self.assertNotIn(b"\x1b]52;c;?", self.output)
 
     def test_codex_exit_and_interrupt_return_to_shell_without_relaunch(self):
         pane = next(p for p in self.terminals() if p["title"] == "codex")

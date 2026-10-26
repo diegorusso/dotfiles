@@ -3,6 +3,9 @@ local function validate()
   assert(vim.v.vim_did_enter == 1)
   assert(vim.v.errmsg == "", vim.v.errmsg)
   assert(require("astronvim").version() == "v6.1.0")
+  if vim.env.ZELLIJ and (vim.env.SSH_CONNECTION or vim.env.SSH_TTY) then
+    assert(vim.fn["provider#clipboard#Executable"]() == "OSC 52 (Zellij)")
+  end
 
   local function edit(name, lines)
     vim.fn.writefile(lines, name)
