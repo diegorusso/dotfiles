@@ -38,57 +38,69 @@ keybinds {
 }
 
 themes {
-    // Legacy palettes use fg for inactive tab backgrounds and white for UI text.
+    // Explicit UI styles keep shortcut letters independent of red error messages.
     dotfiles-green {
-        fg "#509c67"
-        bg "#21482e"
-        black "#102b1b"
-        red "#e67e80"
-        green "#87d787"
-        yellow "#dbbc7f"
-        blue "#7fbbb3"
-        magenta "#d699b6"
-        orange "#e69875"
-        cyan "#83c092"
-        white "#b7efc5"
+        ribbon_unselected { base "#102b1b"; background "#87d787"; emphasis_0 "#102b1b"; emphasis_1 "#b7efc5"; emphasis_2 "#7fbbb3"; emphasis_3 "#d699b6"; }
+        ribbon_selected { base "#102b1b"; background "#b7efc5"; emphasis_0 "#102b1b"; emphasis_1 "#e69875"; emphasis_2 "#d699b6"; emphasis_3 "#7fbbb3"; }
+        text_unselected { base "#b7efc5"; background "#102b1b"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#87d787"; emphasis_3 "#d699b6"; }
+        text_selected { base "#b7efc5"; background "#21482e"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#87d787"; emphasis_3 "#d699b6"; }
+        frame_selected { base "#87d787"; background 0; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#d699b6"; emphasis_3 0; }
+        frame_highlight { base "#e69875"; background 0; emphasis_0 "#d699b6"; emphasis_1 0; emphasis_2 "#e69875"; emphasis_3 "#e69875"; }
+        exit_code_success { base "#87d787"; background 0; emphasis_0 "#83c092"; emphasis_1 "#102b1b"; emphasis_2 "#d699b6"; emphasis_3 "#7fbbb3"; }
+        exit_code_error { base "#e67e80"; background 0; emphasis_0 "#dbbc7f"; emphasis_1 0; emphasis_2 0; emphasis_3 0; }
+        table_title { base "#87d787"; background 0; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#87d787"; emphasis_3 "#d699b6"; }
+        table_cell_unselected { base "#b7efc5"; background "#102b1b"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#87d787"; emphasis_3 "#d699b6"; }
+        table_cell_selected { base "#b7efc5"; background "#21482e"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#87d787"; emphasis_3 "#d699b6"; }
+        list_unselected { base "#b7efc5"; background "#102b1b"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#87d787"; emphasis_3 "#d699b6"; }
+        list_selected { base "#b7efc5"; background "#21482e"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#87d787"; emphasis_3 "#d699b6"; }
+        multiplayer_user_colors { player_1 "#d699b6"; player_2 "#7fbbb3"; player_3 0; player_4 "#dbbc7f"; player_5 "#83c092"; player_6 0; player_7 "#e67e80"; player_8 0; player_9 0; player_10 0; }
     }
     dotfiles-blue {
-        fg "#5f94c8"
-        bg "#173f5f"
-        black "#10283f"
-        red "#e67e80"
-        green "#5fafff"
-        yellow "#dbbc7f"
-        blue "#7fbbb3"
-        magenta "#d699b6"
-        orange "#e69875"
-        cyan "#83c092"
-        white "#bfddff"
+        ribbon_unselected { base "#10283f"; background "#5f94c8"; emphasis_0 "#10283f"; emphasis_1 "#bfddff"; emphasis_2 "#7fbbb3"; emphasis_3 "#d699b6"; }
+        ribbon_selected { base "#10283f"; background "#5fafff"; emphasis_0 "#10283f"; emphasis_1 "#e69875"; emphasis_2 "#d699b6"; emphasis_3 "#7fbbb3"; }
+        text_unselected { base "#bfddff"; background "#10283f"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#5fafff"; emphasis_3 "#d699b6"; }
+        text_selected { base "#bfddff"; background "#173f5f"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#5fafff"; emphasis_3 "#d699b6"; }
+        frame_selected { base "#5fafff"; background 0; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#d699b6"; emphasis_3 0; }
+        frame_highlight { base "#e69875"; background 0; emphasis_0 "#d699b6"; emphasis_1 0; emphasis_2 "#e69875"; emphasis_3 "#e69875"; }
+        exit_code_success { base "#5fafff"; background 0; emphasis_0 "#83c092"; emphasis_1 "#10283f"; emphasis_2 "#d699b6"; emphasis_3 "#7fbbb3"; }
+        exit_code_error { base "#e67e80"; background 0; emphasis_0 "#dbbc7f"; emphasis_1 0; emphasis_2 0; emphasis_3 0; }
+        table_title { base "#5fafff"; background 0; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#5fafff"; emphasis_3 "#d699b6"; }
+        table_cell_unselected { base "#bfddff"; background "#10283f"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#5fafff"; emphasis_3 "#d699b6"; }
+        table_cell_selected { base "#bfddff"; background "#173f5f"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#5fafff"; emphasis_3 "#d699b6"; }
+        list_unselected { base "#bfddff"; background "#10283f"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#5fafff"; emphasis_3 "#d699b6"; }
+        list_selected { base "#bfddff"; background "#173f5f"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#5fafff"; emphasis_3 "#d699b6"; }
+        multiplayer_user_colors { player_1 "#d699b6"; player_2 "#7fbbb3"; player_3 0; player_4 "#dbbc7f"; player_5 "#83c092"; player_6 0; player_7 "#e67e80"; player_8 0; player_9 0; player_10 0; }
     }
     dotfiles-purple {
-        fg "#9f7ac8"
-        bg "#402854"
-        black "#281838"
-        red "#e67e80"
-        green "#af87ff"
-        yellow "#dbbc7f"
-        blue "#7fbbb3"
-        magenta "#d699b6"
-        orange "#e69875"
-        cyan "#83c092"
-        white "#e0c8ff"
+        ribbon_unselected { base "#281838"; background "#9f7ac8"; emphasis_0 "#281838"; emphasis_1 "#e0c8ff"; emphasis_2 "#7fbbb3"; emphasis_3 "#d699b6"; }
+        ribbon_selected { base "#281838"; background "#af87ff"; emphasis_0 "#281838"; emphasis_1 "#e69875"; emphasis_2 "#d699b6"; emphasis_3 "#7fbbb3"; }
+        text_unselected { base "#e0c8ff"; background "#281838"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#af87ff"; emphasis_3 "#d699b6"; }
+        text_selected { base "#e0c8ff"; background "#402854"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#af87ff"; emphasis_3 "#d699b6"; }
+        frame_selected { base "#af87ff"; background 0; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#d699b6"; emphasis_3 0; }
+        frame_highlight { base "#e69875"; background 0; emphasis_0 "#d699b6"; emphasis_1 0; emphasis_2 "#e69875"; emphasis_3 "#e69875"; }
+        exit_code_success { base "#af87ff"; background 0; emphasis_0 "#83c092"; emphasis_1 "#281838"; emphasis_2 "#d699b6"; emphasis_3 "#7fbbb3"; }
+        exit_code_error { base "#e67e80"; background 0; emphasis_0 "#dbbc7f"; emphasis_1 0; emphasis_2 0; emphasis_3 0; }
+        table_title { base "#af87ff"; background 0; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#af87ff"; emphasis_3 "#d699b6"; }
+        table_cell_unselected { base "#e0c8ff"; background "#281838"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#af87ff"; emphasis_3 "#d699b6"; }
+        table_cell_selected { base "#e0c8ff"; background "#402854"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#af87ff"; emphasis_3 "#d699b6"; }
+        list_unselected { base "#e0c8ff"; background "#281838"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#af87ff"; emphasis_3 "#d699b6"; }
+        list_selected { base "#e0c8ff"; background "#402854"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#af87ff"; emphasis_3 "#d699b6"; }
+        multiplayer_user_colors { player_1 "#d699b6"; player_2 "#7fbbb3"; player_3 0; player_4 "#dbbc7f"; player_5 "#83c092"; player_6 0; player_7 "#e67e80"; player_8 0; player_9 0; player_10 0; }
     }
     dotfiles-orange {
-        fg "#bd834b"
-        bg "#52351d"
-        black "#322115"
-        red "#e67e80"
-        green "#ffaf5f"
-        yellow "#dbbc7f"
-        blue "#7fbbb3"
-        magenta "#d699b6"
-        orange "#e69875"
-        cyan "#83c092"
-        white "#ffdfba"
+        ribbon_unselected { base "#322115"; background "#ffaf5f"; emphasis_0 "#322115"; emphasis_1 "#ffdfba"; emphasis_2 "#7fbbb3"; emphasis_3 "#d699b6"; }
+        ribbon_selected { base "#322115"; background "#ffdfba"; emphasis_0 "#322115"; emphasis_1 "#e69875"; emphasis_2 "#d699b6"; emphasis_3 "#7fbbb3"; }
+        text_unselected { base "#ffdfba"; background "#322115"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#ffaf5f"; emphasis_3 "#d699b6"; }
+        text_selected { base "#ffdfba"; background "#52351d"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#ffaf5f"; emphasis_3 "#d699b6"; }
+        frame_selected { base "#ffaf5f"; background 0; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#d699b6"; emphasis_3 0; }
+        frame_highlight { base "#e69875"; background 0; emphasis_0 "#d699b6"; emphasis_1 0; emphasis_2 "#e69875"; emphasis_3 "#e69875"; }
+        exit_code_success { base "#ffaf5f"; background 0; emphasis_0 "#83c092"; emphasis_1 "#322115"; emphasis_2 "#d699b6"; emphasis_3 "#7fbbb3"; }
+        exit_code_error { base "#e67e80"; background 0; emphasis_0 "#dbbc7f"; emphasis_1 0; emphasis_2 0; emphasis_3 0; }
+        table_title { base "#ffaf5f"; background 0; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#ffaf5f"; emphasis_3 "#d699b6"; }
+        table_cell_unselected { base "#ffdfba"; background "#322115"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#ffaf5f"; emphasis_3 "#d699b6"; }
+        table_cell_selected { base "#ffdfba"; background "#52351d"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#ffaf5f"; emphasis_3 "#d699b6"; }
+        list_unselected { base "#ffdfba"; background "#322115"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#ffaf5f"; emphasis_3 "#d699b6"; }
+        list_selected { base "#ffdfba"; background "#52351d"; emphasis_0 "#e69875"; emphasis_1 "#83c092"; emphasis_2 "#ffaf5f"; emphasis_3 "#d699b6"; }
+        multiplayer_user_colors { player_1 "#d699b6"; player_2 "#7fbbb3"; player_3 0; player_4 "#dbbc7f"; player_5 "#83c092"; player_6 0; player_7 "#e67e80"; player_8 0; player_9 0; player_10 0; }
     }
 }

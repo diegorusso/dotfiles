@@ -612,9 +612,10 @@ current directory, including after `cd` into a subdirectory.
 
 `zj` selects the accent from the existing `DOTFILES_COLOUR` export in
 `~/.config/extra`: `blue` (work Mac), `green` (Linux VM), `purple` (personal Mac),
-or `orange` (RPi5). Unset or unknown values use green. Bars have dark backgrounds
-tinted to the device colour, with bright matching text and coloured mode labels.
-The selected tab has a brighter background than inactive tabs. Full pane borders
+or `orange` (RPi5). Unset or unknown values use green. Green and orange tab and
+mode labels use the same bright accents as tmux, with a lighter selected tab.
+Blue and purple retain their existing shades. Shortcut letters use dark text
+on coloured labels for contrast, while errors remain red. Full pane borders
 highlight the focused pane in the device colour. Direct `zellij` launches use the
 same layout and shortcuts with the default green accent.
 
