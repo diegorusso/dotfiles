@@ -205,7 +205,7 @@ class WorkspaceTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.session = "dotfiles-check-" + uuid.uuid4().hex[:10]
-        self.env = dict(os.environ, SHELL="/bin/sh", TERM="xterm-256color", COLORTERM="truecolor",
+        self.env = dict(os.environ, SHELL="/bin/sh", TERM="xterm-ghostty", COLORTERM="truecolor",
                         DOTFILES_COLOUR="blue", FZF_DEFAULT_OPTS="--filter=topic",
                         PYTHONDONTWRITEBYTECODE="1")
         for name in ("ZELLIJ", "ZELLIJ_SESSION_NAME", "ZELLIJ_PANE_ID", "ZELLIJ_CONFIG_FILE", "TMUX", "TMUX_PANE"):
@@ -231,8 +231,11 @@ class WorkspaceTests(unittest.TestCase):
             fake.write_text('''#!/usr/bin/env python3
 import json, os, sys
 command = os.path.basename(sys.argv[0]).upper()
+call = {'args':sys.argv[1:], 'cwd':os.getcwd()}
+if command == 'HTOP':
+    call['term'] = os.environ.get('TERM')
 with open(os.environ[f'DOTFILES_TEST_{command}_LOG'], 'a') as stream:
-    stream.write(json.dumps({'args':sys.argv[1:], 'cwd':os.getcwd()}) + '\\n')
+    stream.write(json.dumps(call) + '\\n')
 print(f'FIXTURE_{command}_READY', flush=True)
 for line in sys.stdin:
     if line.strip() == 'exit':
@@ -395,7 +398,7 @@ for line in sys.stdin:
         self.assertLessEqual(abs(logs["pane_rows"] - shell["pane_rows"]), 1)
         widths = [p["pane_columns"] for p in monitor]
         self.assertLessEqual(max(widths) - min(widths), 1)
-        self.assertEqual(self.calls("htop"), [{"args": [], "cwd": self.env["HOME"]}])
+        self.assertEqual(self.calls("htop"), [{"args": [], "cwd": self.env["HOME"], "term": "xterm-256color"}])
         self.assertEqual(self.calls("sudo"), [{"args": ["dmesg", "-wH"], "cwd": self.env["HOME"]}])
         self.assertIsNone(monitor[2].get("terminal_command"))
         self.assertTrue(monitor[1]["is_focused"])

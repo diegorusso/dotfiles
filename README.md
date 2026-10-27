@@ -658,6 +658,12 @@ your sudo password if prompted. Linux follows the kernel log with `sudo dmesg -w
 macOS uses `sudo log stream --style compact --predicate 'process == "kernel"'`.
 Stopping either command leaves a shell in its pane, without restarting it.
 
+Zellij panes use `TERM=xterm-256color`, even when the connecting terminal
+advertises `xterm-ghostty`. This avoids missing-terminfo errors in `htop` and
+other terminal apps on remote hosts. After applying the configuration, start
+a new session to pick up the setting; in an existing pane, run
+`TERM=xterm-256color htop` to recover immediately.
+
 Inside Zellij, Bash starts one background Ralphex watcher per session. Every
 five seconds it checks running Ralphex processes and their open output logs.
 If the repository is already open in a pane, it adds a floating `:logs` pane

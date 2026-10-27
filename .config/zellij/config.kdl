@@ -3,6 +3,11 @@ theme "dotfiles-green"
 default_layout "repo"
 pane_frame_style "full"
 
+// Panes must use a terminal definition available on remote hosts.
+env {
+    TERM "xterm-256color"
+}
+
 // Inherit Zellij's defaults; add workspace shortcuts to Ctrl+B mode.
 keybinds {
     tmux {
