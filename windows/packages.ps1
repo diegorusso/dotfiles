@@ -36,6 +36,7 @@ foreach ($package in $packages) {
     Write-Output ('winget ' + ($installArguments -join ' '))
 }
 & (Join-Path $PSScriptRoot 'tree-sitter.ps1')
+& (Join-Path $PSScriptRoot 'zellij.ps1')
 Write-Output 'uv python install --no-bin --no-registry 3.13'
 if (-not $Apply) {
     Write-Output 'Preview only. Re-run with -Apply to install packages.'
@@ -80,6 +81,7 @@ foreach ($scope in @('Machine', 'User')) {
     }
 }
 & (Join-Path $PSScriptRoot 'tree-sitter.ps1') -Apply
+& (Join-Path $PSScriptRoot 'zellij.ps1') -Apply
 & uv python install --no-bin --no-registry 3.13
 if ($LASTEXITCODE -ne 0) { throw "Python runtime installation failed (exit $LASTEXITCODE)." }
 if (Get-Command psmux -ErrorAction SilentlyContinue) {

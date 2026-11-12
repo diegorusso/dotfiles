@@ -586,11 +586,11 @@ def sync_log(session, directory, job=None, focus=False):
     return window
 
 
-def follow(state):
+def follow(state, open_log=None, should_stop=None):
     current, stream, inode = None, None, None
     print("Ralphex logs: waiting for a runner in this checkout. Ctrl+C returns to the shell.", flush=True)
     try:
-        while True:
+        while not (should_stop and should_stop()):
             try:
                 job = json.loads(Path(state).read_text())
                 path = Path(job["log"])
@@ -600,7 +600,7 @@ def follow(state):
                     if stream:
                         stream.close()
                     print(f"\nRalphex · {job['worktree']}\nLog: {path}\n", flush=True)
-                    stream = path.open("rb")
+                    stream = open_log(path) if open_log else path.open("rb")
                     size = stream.seek(0, os.SEEK_END)
                     stream.seek(max(0, size - 131072))
                     sys.stdout.buffer.write(b"".join(deque(stream, maxlen=80)))

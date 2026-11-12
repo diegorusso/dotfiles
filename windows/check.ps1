@@ -58,6 +58,12 @@ try {
     Assert (Test-Path -LiteralPath (Join-Path $user '.psmux.conf')) 'Native multiplexer configuration missing.'
     Assert (Test-Path -LiteralPath (Join-Path $user '.tmux/layouts/workspace.py')) 'Shared workspace helper missing.'
     Assert (Test-Path -LiteralPath (Join-Path $user '.config/dotfiles/windows/workspace/native-agents.py')) 'Native agent helper missing.'
+    $zellijConfig = Join-Path $user 'AppData/Roaming/Zellij/config'
+    Assert (Test-Path -LiteralPath (Join-Path $zellijConfig 'layouts/repo.kdl')) 'Native Zellij layout missing.'
+    $nativeConfig = Get-Content -LiteralPath (Join-Path $zellijConfig 'config.kdl') -Raw
+    Assert ($nativeConfig.Contains('session_serialization true')) 'Zellij persistence was not enabled.'
+    Assert (-not $nativeConfig.Contains('Run "bash"')) 'Native Zellij configuration still launches Bash.'
+    Assert ((Get-Content -LiteralPath (Join-Path $zellijConfig 'layouts/repo.kdl') -Raw).Contains('"-NoExit"')) 'Workspace commands do not return to PowerShell.'
     Assert (Test-Path -LiteralPath (Join-Path $appData 'Microsoft/Windows Terminal/Fragments/dotfiles/terminal.json')) 'Terminal fragment missing.'
     Assert ([IO.File]::ReadAllText((Join-Path $user '.config/extra')) -eq 'local bash override') 'Bash override changed.'
     Assert ([IO.File]::ReadAllText((Join-Path $user '.config/extra.ps1')) -eq '$env:DOTFILES_TEST_EXTRA = "local"') 'PowerShell override changed.'
@@ -69,6 +75,7 @@ try {
     Assert ([IO.File]::ReadAllText($profileFile) -eq 'original redirected profile') 'Redirected profile was not restored.'
     Assert ([IO.File]::ReadAllText((Join-Path $user '.gitconfig')) -eq 'original git config') 'Git config was not restored.'
     Assert (-not (Test-Path -LiteralPath (Join-Path $appData 'nvim'))) 'Restore retained newly installed editor config.'
+    Assert (-not (Test-Path -LiteralPath (Join-Path $zellijConfig 'config.kdl'))) 'Restore retained newly installed Zellij config.'
     $safety = @(Get-ChildItem -LiteralPath $backupParent -Directory | Where-Object FullName -ne $backup)[0].FullName
     & $bootstrap @arguments -Restore $safety -Apply | Out-Null
     Assert (Test-Path -LiteralPath (Join-Path $appData 'nvim/init.lua')) 'Undoing a restore failed.'
@@ -104,6 +111,19 @@ try {
     Remove-Item -LiteralPath $junction -Force
     Write-Output 'PASS local overrides, custom editor namespace, and restore/path guards'
 
+    $releaseInstaller = Join-Path $PSScriptRoot 'zellij.ps1'
+    $releaseRoot = Join-Path $scratch 'official release test'
+    & $releaseInstaller -LocalAppData $releaseRoot | Out-Null
+    Assert (-not (Test-Path -LiteralPath $releaseRoot)) 'Zellij package preview created files.'
+    $unverified = Join-Path $releaseRoot 'dotfiles/bin/zellij.exe'
+    [IO.Directory]::CreateDirectory((Split-Path -LiteralPath $unverified)) | Out-Null
+    [IO.File]::WriteAllText($unverified, 'unverified existing binary')
+    $rejected = $false
+    try { & $releaseInstaller -LocalAppData $releaseRoot -Apply | Out-Null } catch { $rejected = $_.Exception.Message -like '*different executable*' }
+    Assert $rejected 'Official installer accepted an unverified namesake executable.'
+    Assert ([IO.File]::ReadAllText($unverified) -eq 'unverified existing binary') 'Official installer replaced an existing executable.'
+    Write-Output 'PASS official Zellij offline preview and existing-binary provenance guard'
+
     # These command doubles verify package selection and failure propagation offline.
     $global:DotfilesPackageCalls = [Collections.Generic.List[string]]::new()
     function global:winget {
@@ -127,7 +147,14 @@ try {
         $global:LASTEXITCODE = 0
         'psmux 3.3.8'
     }
-    $helper = Join-Path $PSScriptRoot 'packages.ps1'
+    # Keep release downloads out of this offline package-selection test.
+    $packageFixture = Join-Path $scratch 'package workflow'
+    [IO.Directory]::CreateDirectory($packageFixture) | Out-Null
+    foreach ($name in @('packages.ps1', 'packages.json', 'tree-sitter.ps1', 'psmux-package.ps1')) {
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $packageFixture
+    }
+    [IO.File]::WriteAllText((Join-Path $packageFixture 'zellij.ps1'), 'param([switch]$Apply); if ($Apply) { $global:DotfilesPackageCalls.Add("official-zellij install") }')
+    $helper = Join-Path $packageFixture 'packages.ps1'
     & $helper -Profile Work | Out-Null
     Assert ($global:DotfilesPackageCalls.Count -eq 0) 'Package preview invoked an installer.'
     & $helper -Profile Work -Apply | Out-Null
@@ -137,6 +164,7 @@ try {
     Assert (@($global:DotfilesPackageCalls | Where-Object { $_ -like '*marlocarlo.psmux*--version 3.3.8*' }).Count -eq 1) 'PSMux version was not selected explicitly.'
     Assert (@($global:DotfilesPackageCalls | Where-Object { $_ -eq 'uv python install --no-bin --no-registry 3.13' }).Count -eq 1) 'Workspace Python runtime was not provisioned.'
     Assert (@($global:DotfilesPackageCalls | Where-Object { $_ -like 'tree-sitter --version' }).Count -eq 1) 'Existing standalone CLI was not detected.'
+    Assert (@($global:DotfilesPackageCalls | Where-Object { $_ -eq 'official-zellij install' }).Count -eq 1) 'Official Zellij release installer was omitted.'
 
     $previousLocalAppData = $env:LOCALAPPDATA
     try {
@@ -191,6 +219,31 @@ try {
     . (Join-Path $PSScriptRoot 'interactive.ps1')
     Assert ($env:EDITOR -eq 'nvim') 'PowerShell did not select Neovim.'
     Assert ($env:STARSHIP_CONFIG -eq (Join-Path $HOME '.config/starship.toml')) 'PowerShell did not select the shared prompt.'
+    $previousColour = $env:DOTFILES_COLOUR
+    $global:DotfilesZellijCalls = [Collections.Generic.List[object]]::new()
+    function global:zellij { $global:DotfilesZellijCalls.Add(@($args)) }
+    try {
+        $env:DOTFILES_COLOUR = 'unknown'
+        zj
+        $launch = $global:DotfilesZellijCalls[-1]
+        Assert (($launch -join ' ') -like "attach --create --force-run-commands $([Environment]::MachineName) options --theme dotfiles-green*") 'Machine session or fallback theme incorrect.'
+        $env:DOTFILES_COLOUR = 'PURPLE'
+        zj --session test-explicit
+        Assert (($global:DotfilesZellijCalls[-1] -join ' ') -like '--session test-explicit options --theme dotfiles-purple*') 'Explicit Zellij arguments or theme were lost.'
+        zj --version
+        Assert (($global:DotfilesZellijCalls[-1] -join ' ') -eq '--version') 'Non-launch Zellij arguments were changed.'
+        zj ls
+        Assert (($global:DotfilesZellijCalls[-1] -join ' ') -eq 'ls') 'Native CLI aliases were changed.'
+        zj --session run
+        Assert (($global:DotfilesZellijCalls[-1] -join ' ') -like '--session run options --theme dotfiles-purple*') 'A session name was mistaken for a CLI command.'
+        zj --session test-explicit ac save-session
+        Assert (($global:DotfilesZellijCalls[-1] -join ' ') -eq '--session test-explicit ac save-session') 'CLI actions with global arguments were changed.'
+    } finally {
+        $env:DOTFILES_COLOUR = $previousColour
+        Remove-Item Function:\zellij
+        Remove-Variable DotfilesZellijCalls -Scope Global
+    }
+    Write-Output 'PASS Zellij machine launcher, explicit arguments, themes, and CLI passthrough'
     $newDirectory = Join-Path $scratch 'native shell directory'
     $previousLocation = Get-Location
     try {

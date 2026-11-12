@@ -63,6 +63,45 @@ function tlogs {
     & (Join-Path $HOME '.config/dotfiles/windows/workspace/workspace.ps1') logs -Log $Log
 }
 
+function zj {
+    $colour = if ($env:DOTFILES_COLOUR -in @('green', 'blue', 'purple', 'orange')) { $env:DOTFILES_COLOUR } else { 'green' }
+    $colour = $colour.ToLowerInvariant()
+    $env:DOTFILES_ZELLIJ_SHELL = Join-Path $PSHOME 'pwsh.exe'
+    $passthrough = @('options', 'setup', 'web', 'action', 'ac', 'list-sessions', 'ls', 'list-aliases', 'la',
+                     'watch', 'w', 'kill-session', 'k', 'delete-session', 'd', 'kill-all-sessions', 'ka',
+                     'delete-all-sessions', 'da', 'run', 'r', 'plugin', 'p', 'edit', 'e', 'pipe', 'subscribe',
+                     'help', '--version', '-V', '--help', '-h')
+    $valueOptions = @('--max-panes', '--data-dir', '-s', '--session', '-l', '--layout', '--layout-string',
+                      '-n', '--new-session-with-layout', '-c', '--config', '--config-dir')
+    $command = $null
+    for ($i = 0; $i -lt $args.Count; $i++) {
+        if ($args[$i] -in $valueOptions) { $i++; continue }
+        if ($args[$i] -like '-*') { continue }
+        $command = $args[$i]
+        break
+    }
+    if ($command -in $passthrough -or @($args | Where-Object { $_ -in @('--version', '-V', '--help', '-h') }).Count) {
+        & zellij @args
+        return
+    }
+    $launchArguments = if ($args.Count) { @($args) } else { @('attach', '--create', '--force-run-commands', [Environment]::MachineName) }
+    $session = if (-not $args.Count) { [Environment]::MachineName }
+               elseif ($args[0] -in @('attach', 'a')) { @($args | Select-Object -Skip 1 | Where-Object { $_ -notlike '-*' }) | Select-Object -First 1 }
+               elseif ($args[0] -in @('--session', '-s')) { $args[1] }
+    if ($session) { & (Join-Path $HOME '.config/dotfiles/windows/zellij/workspace.ps1') prepare-resurrection $session }
+    & zellij @launchArguments options --theme "dotfiles-$colour" --default-shell $env:DOTFILES_ZELLIJ_SHELL
+}
+
+function zrepo {
+    & (Join-Path $HOME '.config/dotfiles/windows/zellij/workspace.ps1') pick
+}
+
+# Capture runs automatically; resolve the executable directly inside the helper,
+# bypassing this function. Native programs invoked elsewhere remain untouched.
+function ralphex {
+    & (Join-Path $HOME '.config/dotfiles/windows/zellij/workspace.ps1') run-ralphex @args
+}
+
 # PSReadLine is loaded by interactive console hosts, including Windows Terminal.
 # Prompt and line editor setup is limited to hosts with PSReadLine loaded.
 if (Get-Module PSReadLine) {

@@ -13,6 +13,7 @@ param(
     [string]$Restore,
     [string]$UserHome = $HOME,
     [string]$LocalAppData = $env:LOCALAPPDATA,
+    [string]$RoamingAppData = $(if ($UserHome -eq $HOME) { $env:APPDATA } else { Join-Path $UserHome 'AppData/Roaming' }),
     [string]$ProfilePath = $PROFILE.CurrentUserAllHosts
 )
 
@@ -147,16 +148,17 @@ function Write-TargetDiff([string]$Source, [string]$Destination) {
 
 $UserHome = Get-AbsolutePath $UserHome
 $LocalAppData = Get-AbsolutePath $LocalAppData
+$RoamingAppData = Get-AbsolutePath $RoamingAppData
 $ProfilePath = Get-AbsolutePath $ProfilePath
 if ([IO.Path]::GetExtension($ProfilePath) -ne '.ps1') { throw 'ProfilePath must name a PowerShell .ps1 file.' }
-foreach ($root in @($UserHome, $LocalAppData)) {
+foreach ($root in @($UserHome, $LocalAppData, $RoamingAppData)) {
     if ($root -eq [IO.Path]::GetPathRoot($root).TrimEnd('\')) {
         throw 'A user or application data folder cannot be a drive root.'
     }
 }
 $stateRoot = Join-Path $LocalAppData 'dotfiles'
 $backupParent = Join-Path $stateRoot 'backups'
-$roots = @{ Home = $UserHome; LocalAppData = $LocalAppData; Profile = $ProfilePath }
+$roots = @{ Home = $UserHome; LocalAppData = $LocalAppData; Profile = $ProfilePath; RoamingAppData = $RoamingAppData }
 $targets = [ordered]@{
     gitconfig = @{ Source = Join-Path $PSScriptRoot '.gitconfig'; Destination = Join-Path $UserHome '.gitconfig' }
     gitignore = @{ Source = Join-Path $PSScriptRoot '.gitignore'; Destination = Join-Path $UserHome '.gitignore' }
@@ -166,8 +168,16 @@ $targets = [ordered]@{
     workspace = @{ Source = Join-Path $PSScriptRoot 'windows/workspace'; Destination = Join-Path $UserHome '.config/dotfiles/windows/workspace' }
     tmuxhelper = @{ Source = Join-Path $PSScriptRoot '.tmux/layouts/workspace.py'; Destination = Join-Path $UserHome '.tmux/layouts/workspace.py' }
     psmux = @{ Source = Join-Path $PSScriptRoot 'windows/psmux.conf'; Destination = Join-Path $UserHome '.psmux.conf' }
+    zellijhelper = @{ Source = Join-Path $PSScriptRoot 'windows/zellij'; Destination = Join-Path $UserHome '.config/dotfiles/windows/zellij' }
     terminal = @{ Source = Join-Path $PSScriptRoot 'windows/terminal.json'; Destination = Join-Path $LocalAppData 'Microsoft/Windows Terminal/Fragments/dotfiles/terminal.json' }
     nvim = @{ Source = Join-Path $PSScriptRoot '.config/nvim'; Destination = Join-Path $LocalAppData 'nvim' }
+}
+. (Join-Path $PSScriptRoot 'windows/zellij/config.ps1')
+$zellijFiles = Get-ZellijWindowsFiles -Repository $PSScriptRoot -Wrapper (Join-Path $UserHome '.config/dotfiles/windows/zellij/workspace.ps1') -Shell 'pwsh.exe'
+foreach ($relative in $zellijFiles.Keys) {
+    $id = 'zellij-' + ($relative -replace '[/.]', '-')
+    $targets[$id] = @{ Source = Join-Path $PSScriptRoot ".config/zellij/$relative"; Content = $zellijFiles[$relative]
+                      Destination = Join-Path $RoamingAppData "Zellij/config/$relative" }
 }
 
 # Local overrides and the checkout must never be managed destinations.
@@ -197,6 +207,8 @@ if ($Restore) {
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json -AsHashtable
     if ($manifest.Version -ne 'dotfiles-windows-v1') { throw 'Unsupported Windows restore manifest.' }
     foreach ($key in $roots.Keys) {
+        # Backups made before Zellij support did not manage any roaming targets.
+        if ($key -eq 'RoamingAppData' -and -not $manifest.Roots.ContainsKey($key)) { continue }
         if ($manifest.Roots[$key] -ne $roots[$key]) { throw 'Backup belongs to different destination folders.' }
     }
     $seen = @{}
@@ -223,7 +235,9 @@ if ($Restore) {
             Write-Output 'SKIP      Neovim: XDG_CONFIG_HOME or NVIM_APPNAME selects a custom configuration.'
             continue
         }
-        $operations.Add(@{ Id = $id; Source = $target.Source; Destination = $target.Destination })
+        $operation = @{ Id = $id; Source = $target.Source; Destination = $target.Destination }
+        if ($target.ContainsKey('Content')) { $operation.Content = $target.Content }
+        $operations.Add($operation)
     }
 }
 
@@ -237,6 +251,13 @@ function Save-Journal {
 function Set-ManagedTarget([hashtable]$Operation) {
     $source = $Operation.Source
     $destination = $Operation.Destination
+    $generated = $null
+    try {
+    if ($Operation.ContainsKey('Content')) {
+        $generated = [IO.Path]::GetTempFileName()
+        [IO.File]::WriteAllText($generated, $Operation.Content, [Text.UTF8Encoding]::new($false))
+        $source = $generated
+    }
     Assert-NormalTree $destination
     if ($source -and (Test-SameContent $source $destination)) {
         Write-Output "UNCHANGED $destination"
@@ -281,6 +302,9 @@ function Set-ManagedTarget([hashtable]$Operation) {
         throw
     }
     Write-Output "$action   $destination"
+    } finally {
+        if ($generated) { Remove-Item -LiteralPath $generated -Force }
+    }
 }
 
 $script:backupRoot = $null

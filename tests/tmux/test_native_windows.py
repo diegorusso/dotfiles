@@ -44,6 +44,8 @@ class NativeWorkspaceTests(unittest.TestCase):
             "DOTFILES_MUX_NAMESPACE": cls.namespace, "XDG_STATE_HOME": str(cls.root / "state"),
             "PATH": str(Path(cls.binary).parent) + os.pathsep + os.environ["PATH"],
             "TMUX": "", "TMUX_PANE": "", "PYTHONDONTWRITEBYTECODE": "1", "PYTHONUTF8": "1",
+            # Profiled fixture shells must not start watchers for an outer Zellij session.
+            "ZELLIJ": "", "ZELLIJ_SESSION_NAME": "", "ZELLIJ_PANE_ID": "",
         })
         cls.environment.start()
         cls.workspace.MUX = cls.binary

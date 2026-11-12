@@ -44,8 +44,8 @@ Windows uses PowerShell 7, Windows Terminal, and WinGet. Core packages include
 GitHub CLI (`gh`). Git, the Catppuccin
 Starship prompt, and the complete Neovim configuration share the repository
 sources used by Linux and macOS. Windows has its own shell functions and package
-profiles. PSMux provides native sessions and the repository/worktree workflow
-inside Windows Terminal.
+profiles. Both Zellij and PSMux provide native sessions inside Windows Terminal;
+see [Windows Zellij](#windows-zellij) for the shared three-column workspace.
 
 Clone this repository using Git for Windows, then open PowerShell in the checkout.
 The package helper also works in the built-in Windows PowerShell 5.1, allowing
@@ -76,6 +76,15 @@ The helper also provisions Python **3.13** through uv, without changing the
 system's Python registration or adding executable links. Workspace launches
 use that runtime offline, without project environments or Python dependencies.
 Package installation may request elevation through its individual installers.
+
+The package workflow also installs **Zellij 0.45.1** using
+`windows/zellij.ps1`: the ZIP comes directly from
+[zellij-org/zellij](https://github.com/zellij-org/zellij/releases/tag/v0.45.1),
+with pinned archive and executable SHA-256 checks and a version check. This is
+the upstream Windows release, rather than a similarly named WinGet package.
+Upstream supplies x64 Windows binaries; Windows 11 ARM64 runs this build through
+x64 emulation. Preview remains offline. An identical binary is retained; a
+different binary at the managed destination is never overwritten.
 
 Optional application profiles add to the core tools:
 
@@ -109,6 +118,8 @@ Bootstrap installs:
 | Native PSMux configuration | `~/.psmux.conf` |
 | Shared workspace helper | `~/.tmux/layouts/workspace.py` |
 | PowerShell workspace entrypoint and agent navigation | `~/.config/dotfiles/windows/workspace/` |
+| Native Zellij helpers | `~/.config/dotfiles/windows/zellij/` |
+| Zellij configuration and layouts | `%APPDATA%\Zellij\config\` |
 | Shared Neovim configuration | `%LOCALAPPDATA%\nvim` |
 | Terminal profile and colours | `%LOCALAPPDATA%\Microsoft\Windows Terminal\Fragments\dotfiles\terminal.json` |
 
@@ -684,13 +695,130 @@ Run `./tests/check-zellij.sh` for disposable integration checks with fake Neovim
 and Codex commands; the tests do not start a real conversation. The picker uses
 Bash 3.2+, Git, fzf, jq, and Zellij directly; it does not require Python or tmux.
 
+### Windows Zellij
+
+Use the Windows package and bootstrap commands above. To add only Zellij to an
+already provisioned machine, the normal release installer is also callable
+directly:
+
+```powershell
+.\windows\zellij.ps1           # Offline preview
+.\windows\zellij.ps1 -Apply
+.\bootstrap.ps1 -Diff
+.\bootstrap.ps1 -Apply
+```
+
+Open a **new PowerShell 7 tab in Windows Terminal**, outside PSMux or another
+Zellij session. Change to a checkout and run `zj`. With no arguments it attaches
+to or creates the session named `[Environment]::MachineName`. Explicit launches
+such as `zj --session development` and `zj attach development` are supported.
+`zj --version` and `zj action save-session` also pass through to the native CLI.
+The normal profile and your existing host-specific profile load in each shell.
+Neither terminal titles nor existing Windows Terminal settings are replaced.
+
+Windows uses the same four palettes, full borders, native Zellij keybindings,
+and layout geometry as Unix. Bootstrap generates only the PowerShell command
+substitutions from the shared KDL sources. Keep device preferences in the
+untracked `~/.config/extra.ps1`, for example:
+
+```powershell
+$env:DOTFILES_COLOUR = 'blue'              # green, blue, purple, orange; fallback green
+$env:DOTFILES_REPO_ROOT = "$HOME\repos"    # optional picker root
+```
+
+Use **Ctrl+B**, release it, then uppercase **R** for the picker, uppercase **M**
+for the monitor, or **?** for floating help. `zrepo` opens the same picker from a
+PowerShell pane. Windows help uses fzf: type to search and press Esc to close.
+The picker includes registered worktrees outside the root. It compares canonical
+checkout paths from tiled panes, ignoring floating helpers and mutable tab names.
+Case differences, spaces, Unicode, and separate worktrees are supported. Cancel
+or a failed tab inspection leaves tabs unchanged. The middle PowerShell starts
+focused; only the right pane starts `codex resume --last`. Neovim and Codex run
+once and leave usable shells after exit, failure, or Ctrl+C. Ordinary new tabs
+and splits start shells, with splits inheriting the focused pane's directory.
+
+Windows Terminal's defaults pass Ctrl+B, Ctrl+P, and Alt+F through. If you have
+custom Terminal keybindings for those keys, remove those particular assignments
+in Terminal Settings. The repository's Terminal fragment assigns none of them.
+
+The monitor has the same left-half/right-stack geometry. The left pane reuses
+the native process monitor (top processes by accumulated CPU time, refreshed
+every two seconds). The upper right pane follows the **Windows System event
+log** using `Get-WinEvent`, initially showing the latest 40 events. This includes
+driver, service, and operating-system events; it is the Windows counterpart to
+the Unix kernel-log view. It polls every two seconds, so very large bursts can
+exceed the 40-event poll window. Access uses your current account. Ctrl+C leaves
+a shell in either pane, and opening the monitor starts no agent.
+
+On Windows there is no `lsof` discovery of another process's open log files.
+Instead, invoke **`ralphex ...` from a profiled PowerShell in a Git checkout**.
+The package workflow does not install Ralphex itself; its native executable must
+already be on `PATH`. The PowerShell function launches it, automatically captures
+its combined stdout/stderr, and registers a unique run with its exact checkout.
+No separate registration command is needed. A watcher in each Zellij session
+discovers these runs every five seconds, including quick runs that already
+finished, and puts a floating log viewer in an open matching repository tab,
+preferring the exact worktree. The runner's stdin remains interactive, but its
+output is piped for capture; programs that require a TTY on stdout may behave
+differently. Invoking an absolute executable path or launching Ralphex from
+another host bypasses this integration and cannot be discovered automatically.
+
+Viewers start hidden and preserve focus and the three-column layout. **Alt+F**
+or **Ctrl+P, then w** reveals them. They follow appends, rotation, and subsequent
+runs. Closing a viewer suppresses reopening for that run, including after a
+watcher restart; Ctrl+C leaves a shell. A later run can open a new viewer after
+the previous follower has stopped. Run captures, dismissal state, locks, and
+watcher diagnostics live under `${XDG_STATE_HOME}/dotfiles-zellij` or
+`~/.local/state/dotfiles-zellij` when unset. Captures are retained there until
+you remove them; avoid deleting state while its viewers are running.
+
+Zellij itself reports these Windows paths with `zellij setup --check`:
+
+| Purpose | Default Windows location |
+| --- | --- |
+| Configuration | `%APPDATA%\Zellij\config\config.kdl` |
+| Layouts | `%APPDATA%\Zellij\config\layouts\` |
+| Cache and serialized sessions | `%LOCALAPPDATA%\Zellij\cache\` |
+| Data/plugins | `%APPDATA%\Zellij\data\` |
+
+`ZELLIJ_CONFIG_DIR` can select a separate runtime configuration; bootstrap manages
+only the default directory. Upstream's Windows child-process discovery saves
+foreground programs directly, and can catch a temporary Starship prompt process.
+Before resurrecting an explicitly exited session, `zj` wraps its saved programs
+in profiled PowerShell with `-NoExit`, and replaces a captured Starship prompt
+with a shell. It keeps the original snapshot beside the cache as
+`dotfiles-before-restore.kdl`. Live sessions are never rewritten. This small
+compatibility step targets the pinned 0.45.1 cache format; direct `zellij attach`
+bypasses it. Session serialization stays enabled, and
+viewport/scrollback serialization retains Zellij's default (disabled). Run
+`zellij action save-session` inside a session to save immediately. Detach with
+**Ctrl+O, then d** to keep its processes running. After shutdown or reboot, `zj`
+resurrects the machine-named session and restarts saved pane commands without
+an Enter prompt. Explicit resurrection uses
+`zj attach --force-run-commands development`. Programs restart: unsaved buffers,
+in-flight agent turns, and other unsaved application state are not checkpointed.
+
+Bootstrap previews, backs up, and restores the generated configuration through
+its usual manifest, and preserves `extra.ps1` and existing PSMux sessions. The
+package binary is managed separately from configuration backups. Run these
+focused checks after installation:
+
+```powershell
+.\windows\check.ps1
+uv run --offline --no-project --python 3.13 -m unittest discover -s tests/zellij -p test_native_windows.py -v
+```
+
+The native integration suite uses disposable ConPTY sessions and fake programs,
+not real Codex conversations. The Unix implementation and its checks remain
+unchanged.
+
 ## tmux
 
 The Unix configuration targets tmux 3.2 or newer on macOS and Linux, with Python
 3.9+, Git and fzf. Keep using the existing session and pane shortcuts; each
 checkout has reusable `dev`, `logs` and `tests` windows. The development layout
-is still Neovim / shell / Codex in three equal columns. Native Windows uses
-PSMux and the [Windows workspace entrypoints](#windows-workspaces).
+is still Neovim / shell / Codex in three equal columns. Native Windows also has
+PSMux and its [Windows workspace entrypoints](#windows-workspaces).
 
 | Shortcut (after Ctrl+B) | Action |
 | --- | --- |
